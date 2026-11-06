@@ -10,11 +10,38 @@ export type KanbanLabel = {
   color: ColorToken;
 };
 
+/** How the current viewer can interact with a board. */
+export const KANBAN_BOARD_ROLES = ["owner", "editor", "viewer"] as const;
+
+export type KanbanBoardRole = (typeof KANBAN_BOARD_ROLES)[number];
+
+/** The signed-in person viewing the Kanban page. */
+export type KanbanViewer = {
+  id: number;
+  name: string;
+  email: string;
+  color: ColorToken;
+};
+
+/** A board member, including pending invites that have no account yet. */
+export type KanbanCollaborator = {
+  /** `null` for the owner entry; member row id for invited collaborators. */
+  id: number | null;
+  userId: number | null;
+  name: string;
+  email: string;
+  role: KanbanBoardRole;
+  status: "active" | "pending";
+  color: ColorToken;
+};
+
 export type KanbanBoard = {
   id: number;
   userId: number;
   name: string;
   color: ColorToken;
+  /** The current viewer's access level for this board. */
+  accessRole: KanbanBoardRole;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -48,6 +75,7 @@ export type KanbanTask = {
 };
 
 export type KanbanData = {
+  viewer: KanbanViewer;
   boards: KanbanBoard[];
   columns: KanbanColumn[];
   tasks: KanbanTask[];

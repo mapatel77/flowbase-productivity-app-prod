@@ -6,14 +6,26 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
   calendarEntries,
+  kanbanBoardMembers,
   kanbanBoards,
   kanbanColumns,
   kanbanTasks,
+  users,
 } from "@/db/schema";
 import { isDateKey, toDateKey } from "@/lib/calendar/dates";
 import type { ColorToken } from "@/lib/calendar/colors";
 import { isColorToken } from "@/lib/calendar/colors";
-import { resolveCurrentUserId } from "@/lib/calendar/user";
+import {
+  resolveCurrentUserProfile,
+  type CurrentUserProfile,
+} from "@/lib/calendar/user";
+import {
+  activatePendingBoardInvites,
+  canEditBoard,
+  getAccessibleBoardRoles,
+  getBoardAccess,
+  isBoardOwner,
+} from "@/lib/kanban/access";
 import {
   DEFAULT_COLUMNS,
   MAX_COLUMNS,
@@ -25,14 +37,19 @@ import type {
   BoardCreateResult,
   ColumnDeleteResult,
   KanbanBoard,
+  KanbanBoardRole,
+  KanbanCollaborator,
   KanbanColumn,
   KanbanData,
   KanbanLabel,
   KanbanPriority,
   KanbanTask,
+  KanbanViewer,
   TaskMutationResult,
 } from "@/lib/kanban/types";
 import { KANBAN_PRIORITIES } from "@/lib/kanban/types";
+import { deleteBoardRoom, deleteTaskThreads } from "@/lib/liveblocks/server";
+import { getUserColor, getUserDisplayName } from "@/lib/liveblocks/user-color";
 
 /* ── normalisation ─────────────────────────────────────────────────────── */
 
@@ -73,12 +90,20 @@ function normalizeLabels(value: unknown): KanbanLabel[] {
   return labels;
 }
 
-function toBoard(row: typeof kanbanBoards.$inferSelect): KanbanBoard {
+function normalizeMemberRole(role: string | null | undefined): KanbanBoardRole {
+  return role === "viewer" ? "viewer" : "editor";
+}
+
+function toBoard(
+  row: typeof kanbanBoards.$inferSelect,
+  accessRole: KanbanBoardRole = "owner",
+): KanbanBoard {
   return {
     id: row.id,
     userId: row.userId,
     name: row.name,
     color: isColorToken(row.color) ? row.color : "sky",
+    accessRole,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -114,6 +139,15 @@ function toTask(row: typeof kanbanTasks.$inferSelect): KanbanTask {
   };
 }
 
+function toViewer(profile: CurrentUserProfile): KanbanViewer {
+  return {
+    id: profile.id,
+    name: getUserDisplayName(profile.name, profile.email),
+    email: profile.email,
+    color: getUserColor(profile.email),
+  };
+}
+
 function fail(error: unknown): ActionResult<never> {
   const message =
     error instanceof Error ? error.message : "Something went wrong. Try again.";
@@ -123,22 +157,37 @@ function fail(error: unknown): ActionResult<never> {
 
 /* ── queries ───────────────────────────────────────────────────────────── */
 
-/** Loads every board, column and task that belongs to the current user. */
+/**
+ * Loads every board, column and task the current user can access. A board's
+ * columns and tasks are shared in full, so row ownership no longer scopes the
+ * read — board membership does.
+ */
 export async function getKanbanData(): Promise<ActionResult<KanbanData>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    const viewer = toViewer(profile);
+    const roles = await getAccessibleBoardRoles(profile);
+    const boardIds = [...roles.keys()];
+
+    if (boardIds.length === 0) {
+      return {
+        ok: true,
+        data: { viewer, boards: [], columns: [], tasks: [] },
+      };
+    }
 
     const [boardRows, columnRows, taskRows] = await Promise.all([
       db
         .select()
         .from(kanbanBoards)
-        .where(eq(kanbanBoards.userId, userId))
+        .where(inArray(kanbanBoards.id, boardIds))
         .orderBy(asc(kanbanBoards.createdAt), asc(kanbanBoards.id)),
       db
         .select()
         .from(kanbanColumns)
-        .where(eq(kanbanColumns.userId, userId))
+        .where(inArray(kanbanColumns.boardId, boardIds))
         .orderBy(
           asc(kanbanColumns.boardId),
           asc(kanbanColumns.position),
@@ -147,7 +196,7 @@ export async function getKanbanData(): Promise<ActionResult<KanbanData>> {
       db
         .select()
         .from(kanbanTasks)
-        .where(eq(kanbanTasks.userId, userId))
+        .where(inArray(kanbanTasks.boardId, boardIds))
         .orderBy(
           asc(kanbanTasks.boardId),
           asc(kanbanTasks.columnId),
@@ -159,7 +208,10 @@ export async function getKanbanData(): Promise<ActionResult<KanbanData>> {
     return {
       ok: true,
       data: {
-        boards: boardRows.map(toBoard),
+        viewer,
+        boards: boardRows.map((row) =>
+          toBoard(row, roles.get(row.id) ?? "editor"),
+        ),
         columns: columnRows.map(toColumn),
         tasks: taskRows.map(toTask),
       },
@@ -176,8 +228,8 @@ export async function createBoard(input: {
   color: ColorToken;
 }): Promise<ActionResult<BoardCreateResult>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Give the board a name." };
@@ -186,7 +238,7 @@ export async function createBoard(input: {
 
     const [boardRow] = await db
       .insert(kanbanBoards)
-      .values({ userId, name, color })
+      .values({ userId: profile.id, name, color })
       .returning();
 
     try {
@@ -195,7 +247,7 @@ export async function createBoard(input: {
         .values(
           DEFAULT_COLUMNS.map((columnName, position) => ({
             boardId: boardRow.id,
-            userId,
+            userId: profile.id,
             name: columnName,
             position,
           })),
@@ -207,7 +259,7 @@ export async function createBoard(input: {
       return {
         ok: true,
         data: {
-          board: toBoard(boardRow),
+          board: toBoard(boardRow, "owner"),
           columns: columnRows
             .map(toColumn)
             .sort((a, b) => a.position - b.position || a.id - b.id),
@@ -215,11 +267,7 @@ export async function createBoard(input: {
       };
     } catch (error) {
       // Do not leave a half-created board behind if seeding failed.
-      await db
-        .delete(kanbanBoards)
-        .where(
-          and(eq(kanbanBoards.id, boardRow.id), eq(kanbanBoards.userId, userId)),
-        );
+      await db.delete(kanbanBoards).where(eq(kanbanBoards.id, boardRow.id));
       throw error;
     }
   } catch (error) {
@@ -233,8 +281,14 @@ export async function updateBoard(input: {
   color?: ColorToken;
 }): Promise<ActionResult<KanbanBoard>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    const access = await getBoardAccess(profile, input.id);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+    if (!isBoardOwner(access.role)) {
+      return { ok: false, error: "Only the board owner can edit its details." };
+    }
 
     const values: Partial<typeof kanbanBoards.$inferInsert> = {
       updatedAt: new Date(),
@@ -256,15 +310,13 @@ export async function updateBoard(input: {
     const [row] = await db
       .update(kanbanBoards)
       .set(values)
-      .where(
-        and(eq(kanbanBoards.id, input.id), eq(kanbanBoards.userId, userId)),
-      )
+      .where(eq(kanbanBoards.id, input.id))
       .returning();
 
     if (!row) return { ok: false, error: "That board no longer exists." };
 
     revalidatePath("/tasks");
-    return { ok: true, data: toBoard(row) };
+    return { ok: true, data: toBoard(row, access.role) };
   } catch (error) {
     return fail(error);
   }
@@ -274,19 +326,13 @@ export async function deleteBoard(input: {
   id: number;
 }): Promise<ActionResult<{ id: number }>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const boardRows = await db
-      .select({ id: kanbanBoards.id })
-      .from(kanbanBoards)
-      .where(
-        and(eq(kanbanBoards.id, input.id), eq(kanbanBoards.userId, userId)),
-      )
-      .limit(1);
-
-    if (!boardRows[0]) {
-      return { ok: false, error: "That board no longer exists." };
+    const access = await getBoardAccess(profile, input.id);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+    if (!isBoardOwner(access.role)) {
+      return { ok: false, error: "Only the board owner can delete this board." };
     }
 
     const linkedTasks = await db
@@ -295,7 +341,6 @@ export async function deleteBoard(input: {
       .where(
         and(
           eq(kanbanTasks.boardId, input.id),
-          eq(kanbanTasks.userId, userId),
           isNotNull(kanbanTasks.calendarEntryId),
         ),
       );
@@ -307,23 +352,213 @@ export async function deleteBoard(input: {
     if (calendarEntryIds.length > 0) {
       await db
         .delete(calendarEntries)
-        .where(
-          and(
-            eq(calendarEntries.userId, userId),
-            inArray(calendarEntries.id, calendarEntryIds),
-          ),
-        );
+        .where(inArray(calendarEntries.id, calendarEntryIds));
     }
 
-    await db
-      .delete(kanbanBoards)
-      .where(
-        and(eq(kanbanBoards.id, input.id), eq(kanbanBoards.userId, userId)),
-      );
+    await db.delete(kanbanBoards).where(eq(kanbanBoards.id, input.id));
+    await deleteBoardRoom(input.id);
 
     revalidatePath("/tasks");
     revalidatePath("/calendar");
     return { ok: true, data: { id: input.id } };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ── sharing ───────────────────────────────────────────────────────────── */
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Shares a board with an email address. Known accounts become active members
+ * immediately; unknown emails stay pending until that person signs in.
+ */
+export async function inviteBoardMember(input: {
+  boardId: number;
+  email: string;
+}): Promise<ActionResult<KanbanCollaborator>> {
+  try {
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    const access = await getBoardAccess(profile, input.boardId);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+    if (!isBoardOwner(access.role)) {
+      return { ok: false, error: "Only the board owner can invite people." };
+    }
+
+    const email = normalizeEmail(input.email);
+    if (!EMAIL_PATTERN.test(email)) {
+      return { ok: false, error: "Enter a valid email address." };
+    }
+
+    const [owner] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, access.board.userId))
+      .limit(1);
+
+    if (owner && owner.email.trim().toLowerCase() === email) {
+      return { ok: false, error: "You already own this board." };
+    }
+
+    const [existingUser] = await db
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    const [existingMember] = await db
+      .select({ id: kanbanBoardMembers.id })
+      .from(kanbanBoardMembers)
+      .where(
+        and(
+          eq(kanbanBoardMembers.boardId, input.boardId),
+          eq(kanbanBoardMembers.email, email),
+        ),
+      )
+      .limit(1);
+
+    if (existingMember) {
+      return {
+        ok: false,
+        error: "That person can already access this board.",
+      };
+    }
+
+    const [row] = await db
+      .insert(kanbanBoardMembers)
+      .values({
+        boardId: input.boardId,
+        userId: existingUser?.id ?? null,
+        email,
+        role: "editor",
+      })
+      .returning();
+
+    revalidatePath("/tasks");
+
+    return {
+      ok: true,
+      data: {
+        id: row.id,
+        userId: row.userId,
+        name: getUserDisplayName(existingUser?.name, email),
+        email,
+        role: normalizeMemberRole(row.role),
+        status: row.userId ? "active" : "pending",
+        color: getUserColor(email),
+      },
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function removeBoardMember(input: {
+  boardId: number;
+  memberId: number;
+}): Promise<ActionResult<{ id: number }>> {
+  try {
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    const access = await getBoardAccess(profile, input.boardId);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+    if (!isBoardOwner(access.role)) {
+      return { ok: false, error: "Only the board owner can remove people." };
+    }
+
+    const [member] = await db
+      .select({ id: kanbanBoardMembers.id })
+      .from(kanbanBoardMembers)
+      .where(
+        and(
+          eq(kanbanBoardMembers.id, input.memberId),
+          eq(kanbanBoardMembers.boardId, input.boardId),
+        ),
+      )
+      .limit(1);
+
+    if (!member) return { ok: false, error: "That collaborator was not found." };
+
+    await db
+      .delete(kanbanBoardMembers)
+      .where(eq(kanbanBoardMembers.id, input.memberId));
+
+    revalidatePath("/tasks");
+    return { ok: true, data: { id: input.memberId } };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** Lists the owner and every active or pending collaborator on a board. */
+export async function getBoardCollaborators(input: {
+  boardId: number;
+}): Promise<ActionResult<KanbanCollaborator[]>> {
+  try {
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    await activatePendingBoardInvites(profile);
+
+    const access = await getBoardAccess(profile, input.boardId);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+
+    const [ownerRows, memberRows] = await Promise.all([
+      db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, access.board.userId))
+        .limit(1),
+      db
+        .select({
+          id: kanbanBoardMembers.id,
+          userId: kanbanBoardMembers.userId,
+          email: kanbanBoardMembers.email,
+          role: kanbanBoardMembers.role,
+          userName: users.name,
+        })
+        .from(kanbanBoardMembers)
+        .leftJoin(users, eq(users.id, kanbanBoardMembers.userId))
+        .where(eq(kanbanBoardMembers.boardId, input.boardId))
+        .orderBy(asc(kanbanBoardMembers.createdAt), asc(kanbanBoardMembers.id)),
+    ]);
+
+    const owner = ownerRows[0];
+    const collaborators: KanbanCollaborator[] = [];
+
+    if (owner) {
+      collaborators.push({
+        id: null,
+        userId: owner.id,
+        name: getUserDisplayName(owner.name, owner.email),
+        email: owner.email,
+        role: "owner",
+        status: "active",
+        color: getUserColor(owner.email),
+      });
+    }
+
+    for (const member of memberRows) {
+      collaborators.push({
+        id: member.id,
+        userId: member.userId,
+        name: getUserDisplayName(member.userName, member.email),
+        email: member.email,
+        role: normalizeMemberRole(member.role),
+        status: member.userId ? "active" : "pending",
+        color: getUserColor(member.email),
+      });
+    }
+
+    return { ok: true, data: collaborators };
   } catch (error) {
     return fail(error);
   }
@@ -336,33 +571,19 @@ export async function createColumn(input: {
   name: string;
 }): Promise<ActionResult<KanbanColumn>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const boardRows = await db
-      .select({ id: kanbanBoards.id })
-      .from(kanbanBoards)
-      .where(
-        and(
-          eq(kanbanBoards.id, input.boardId),
-          eq(kanbanBoards.userId, userId),
-        ),
-      )
-      .limit(1);
-
-    if (!boardRows[0]) {
-      return { ok: false, error: "That board no longer exists." };
+    const access = await getBoardAccess(profile, input.boardId);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
     }
 
     const existing = await db
       .select({ position: kanbanColumns.position })
       .from(kanbanColumns)
-      .where(
-        and(
-          eq(kanbanColumns.boardId, input.boardId),
-          eq(kanbanColumns.userId, userId),
-        ),
-      )
+      .where(eq(kanbanColumns.boardId, input.boardId))
       .orderBy(desc(kanbanColumns.position));
 
     if (existing.length >= MAX_COLUMNS) {
@@ -379,7 +600,7 @@ export async function createColumn(input: {
       .insert(kanbanColumns)
       .values({
         boardId: input.boardId,
-        userId,
+        userId: profile.id,
         name,
         position: (existing[0]?.position ?? -1) + 1,
       })
@@ -397,8 +618,22 @@ export async function updateColumn(input: {
   name: string;
 }): Promise<ActionResult<KanbanColumn>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    const [column] = await db
+      .select({ boardId: kanbanColumns.boardId })
+      .from(kanbanColumns)
+      .where(eq(kanbanColumns.id, input.id))
+      .limit(1);
+
+    if (!column) return { ok: false, error: "That column no longer exists." };
+
+    const access = await getBoardAccess(profile, column.boardId);
+    if (!access) return { ok: false, error: "That column no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
+    }
 
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Give the column a name." };
@@ -406,9 +641,7 @@ export async function updateColumn(input: {
     const [row] = await db
       .update(kanbanColumns)
       .set({ name })
-      .where(
-        and(eq(kanbanColumns.id, input.id), eq(kanbanColumns.userId, userId)),
-      )
+      .where(eq(kanbanColumns.id, input.id))
       .returning();
 
     if (!row) return { ok: false, error: "That column no longer exists." };
@@ -424,29 +657,27 @@ export async function deleteColumn(input: {
   id: number;
 }): Promise<ActionResult<ColumnDeleteResult>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const columnRows = await db
+    const [column] = await db
       .select()
       .from(kanbanColumns)
-      .where(
-        and(eq(kanbanColumns.id, input.id), eq(kanbanColumns.userId, userId)),
-      )
+      .where(eq(kanbanColumns.id, input.id))
       .limit(1);
 
-    const column = columnRows[0];
     if (!column) return { ok: false, error: "That column no longer exists." };
+
+    const access = await getBoardAccess(profile, column.boardId);
+    if (!access) return { ok: false, error: "That column no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
+    }
 
     const boardColumns = await db
       .select()
       .from(kanbanColumns)
-      .where(
-        and(
-          eq(kanbanColumns.boardId, column.boardId),
-          eq(kanbanColumns.userId, userId),
-        ),
-      )
+      .where(eq(kanbanColumns.boardId, column.boardId))
       .orderBy(asc(kanbanColumns.position), asc(kanbanColumns.id));
 
     if (boardColumns.length <= 1) {
@@ -464,23 +695,13 @@ export async function deleteColumn(input: {
     const tasksToMove = await db
       .select()
       .from(kanbanTasks)
-      .where(
-        and(
-          eq(kanbanTasks.columnId, column.id),
-          eq(kanbanTasks.userId, userId),
-        ),
-      )
+      .where(eq(kanbanTasks.columnId, column.id))
       .orderBy(asc(kanbanTasks.position), asc(kanbanTasks.id));
 
     const targetTail = await db
       .select({ position: kanbanTasks.position })
       .from(kanbanTasks)
-      .where(
-        and(
-          eq(kanbanTasks.columnId, target.id),
-          eq(kanbanTasks.userId, userId),
-        ),
-      )
+      .where(eq(kanbanTasks.columnId, target.id))
       .orderBy(desc(kanbanTasks.position))
       .limit(1);
 
@@ -495,19 +716,13 @@ export async function deleteColumn(input: {
           position: startPosition + index,
           updatedAt: new Date(),
         })
-        .where(
-          and(eq(kanbanTasks.id, task.id), eq(kanbanTasks.userId, userId)),
-        )
+        .where(eq(kanbanTasks.id, task.id))
         .returning();
 
       if (row) movedTasks.push(toTask(row));
     }
 
-    await db
-      .delete(kanbanColumns)
-      .where(
-        and(eq(kanbanColumns.id, column.id), eq(kanbanColumns.userId, userId)),
-      );
+    await db.delete(kanbanColumns).where(eq(kanbanColumns.id, column.id));
 
     revalidatePath("/tasks");
     return {
@@ -553,29 +768,23 @@ async function deleteCalendarEntry(userId: number, entryId: number) {
 }
 
 async function linkTaskToCalendarEntry(
-  userId: number,
   task: KanbanTask,
   entryId: number,
 ): Promise<KanbanTask> {
   const [row] = await db
     .update(kanbanTasks)
     .set({ calendarEntryId: entryId, updatedAt: new Date() })
-    .where(and(eq(kanbanTasks.id, task.id), eq(kanbanTasks.userId, userId)))
+    .where(eq(kanbanTasks.id, task.id))
     .returning();
 
   return row ? toTask(row) : task;
 }
 
-async function nextTaskPosition(
-  userId: number,
-  columnId: number,
-): Promise<number> {
+async function nextTaskPosition(columnId: number): Promise<number> {
   const tail = await db
     .select({ position: kanbanTasks.position })
     .from(kanbanTasks)
-    .where(
-      and(eq(kanbanTasks.userId, userId), eq(kanbanTasks.columnId, columnId)),
-    )
+    .where(eq(kanbanTasks.columnId, columnId))
     .orderBy(desc(kanbanTasks.position))
     .limit(1);
 
@@ -598,23 +807,26 @@ export async function createTask(
   input: CreateTaskInput,
 ): Promise<ActionResult<TaskMutationResult>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const columnRows = await db
-      .select({ id: kanbanColumns.id })
+    const [column] = await db
+      .select({ id: kanbanColumns.id, boardId: kanbanColumns.boardId })
       .from(kanbanColumns)
       .where(
         and(
           eq(kanbanColumns.id, input.columnId),
           eq(kanbanColumns.boardId, input.boardId),
-          eq(kanbanColumns.userId, userId),
         ),
       )
       .limit(1);
 
-    if (!columnRows[0]) {
-      return { ok: false, error: "That column no longer exists." };
+    if (!column) return { ok: false, error: "That column no longer exists." };
+
+    const access = await getBoardAccess(profile, input.boardId);
+    if (!access) return { ok: false, error: "That board no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
     }
 
     const title = input.title.trim();
@@ -632,13 +844,13 @@ export async function createTask(
       .values({
         boardId: input.boardId,
         columnId: input.columnId,
-        userId,
+        userId: profile.id,
         title,
         description: input.description?.trim() || null,
         dueDate,
         priority: isPriority(input.priority) ? input.priority : "medium",
         labels: normalizeLabels(input.labels),
-        position: await nextTaskPosition(userId, input.columnId),
+        position: await nextTaskPosition(input.columnId),
         notesLinked: input.notesLinked ?? false,
       })
       .returning();
@@ -648,10 +860,10 @@ export async function createTask(
 
     if (input.syncCalendar) {
       try {
-        const entryId = await createCalendarEntryForTask(userId, task);
+        const entryId = await createCalendarEntryForTask(profile.id, task);
 
         if (entryId) {
-          task = await linkTaskToCalendarEntry(userId, task, entryId);
+          task = await linkTaskToCalendarEntry(task, entryId);
         } else {
           syncError = "The task was saved, but Calendar sync failed.";
         }
@@ -688,19 +900,22 @@ export async function updateTask(
   input: UpdateTaskInput,
 ): Promise<ActionResult<TaskMutationResult>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const existingRows = await db
+    const [existing] = await db
       .select()
       .from(kanbanTasks)
-      .where(
-        and(eq(kanbanTasks.id, input.id), eq(kanbanTasks.userId, userId)),
-      )
+      .where(eq(kanbanTasks.id, input.id))
       .limit(1);
 
-    const existing = existingRows[0];
     if (!existing) return { ok: false, error: "That task no longer exists." };
+
+    const access = await getBoardAccess(profile, existing.boardId);
+    if (!access) return { ok: false, error: "That task no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
+    }
 
     const patch = input.patch;
     const values: Partial<typeof kanbanTasks.$inferInsert> = {
@@ -745,76 +960,88 @@ export async function updateTask(
     const [row] = await db
       .update(kanbanTasks)
       .set(values)
-      .where(
-        and(eq(kanbanTasks.id, input.id), eq(kanbanTasks.userId, userId)),
-      )
+      .where(eq(kanbanTasks.id, input.id))
       .returning();
 
     let task = toTask(row);
     let syncError: string | undefined;
+    const canManageCalendar = existing.userId === profile.id;
 
-    if (input.syncCalendar === false) {
-      if (task.calendarEntryId) {
-        try {
-          await deleteCalendarEntry(userId, task.calendarEntryId);
-
-          const [unlinked] = await db
-            .update(kanbanTasks)
-            .set({ calendarEntryId: null, updatedAt: new Date() })
-            .where(
-              and(eq(kanbanTasks.id, task.id), eq(kanbanTasks.userId, userId)),
-            )
-            .returning();
-
-          if (unlinked) task = toTask(unlinked);
-        } catch (error) {
-          console.error("Failed to remove a Kanban Calendar link", error);
-          syncError = "The task was saved, but Calendar sync could not be removed.";
-        }
-      }
-    } else if (input.syncCalendar === true || task.calendarEntryId) {
-      try {
+    if (input.syncCalendar !== undefined && !canManageCalendar) {
+      syncError =
+        "Only the task creator can change its Calendar sync. The task itself was saved.";
+    } else if (canManageCalendar) {
+      if (input.syncCalendar === false) {
         if (task.calendarEntryId) {
-          const [entry] = await db
-            .update(calendarEntries)
-            .set({
-              title: task.title,
-              notes: task.description,
-              scheduledDate: task.dueDate,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(calendarEntries.id, task.calendarEntryId),
-                eq(calendarEntries.userId, userId),
-              ),
-            )
-            .returning({ id: calendarEntries.id });
+          try {
+            await deleteCalendarEntry(task.userId, task.calendarEntryId);
 
-          if (!entry) {
-            const entryId = await createCalendarEntryForTask(userId, task);
+            const [unlinked] = await db
+              .update(kanbanTasks)
+              .set({ calendarEntryId: null, updatedAt: new Date() })
+              .where(eq(kanbanTasks.id, task.id))
+              .returning();
+
+            if (unlinked) task = toTask(unlinked);
+          } catch (error) {
+            console.error("Failed to remove a Kanban Calendar link", error);
+            syncError =
+              "The task was saved, but Calendar sync could not be removed.";
+          }
+        }
+      } else if (input.syncCalendar === true || task.calendarEntryId) {
+        try {
+          if (task.calendarEntryId) {
+            const [entry] = await db
+              .update(calendarEntries)
+              .set({
+                title: task.title,
+                notes: task.description,
+                scheduledDate: task.dueDate,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(calendarEntries.id, task.calendarEntryId),
+                  eq(calendarEntries.userId, task.userId),
+                ),
+              )
+              .returning({ id: calendarEntries.id });
+
+            if (!entry) {
+              const entryId = await createCalendarEntryForTask(
+                task.userId,
+                task,
+              );
+              if (entryId) {
+                task = await linkTaskToCalendarEntry(task, entryId);
+              } else {
+                syncError = "The task was saved, but Calendar sync failed.";
+              }
+            }
+          } else {
+            const entryId = await createCalendarEntryForTask(
+              task.userId,
+              task,
+            );
             if (entryId) {
-              task = await linkTaskToCalendarEntry(userId, task, entryId);
+              task = await linkTaskToCalendarEntry(task, entryId);
             } else {
               syncError = "The task was saved, but Calendar sync failed.";
             }
           }
-        } else {
-          const entryId = await createCalendarEntryForTask(userId, task);
-          if (entryId) {
-            task = await linkTaskToCalendarEntry(userId, task, entryId);
-          } else {
-            syncError = "The task was saved, but Calendar sync failed.";
-          }
+        } catch (error) {
+          console.error("Failed to update a Kanban Calendar link", error);
+          syncError = "The task was saved, but Calendar sync failed.";
         }
-      } catch (error) {
-        console.error("Failed to update a Kanban Calendar link", error);
-        syncError = "The task was saved, but Calendar sync failed.";
       }
     }
 
     revalidatePath("/tasks");
-    if (input.syncCalendar !== undefined || task.calendarEntryId) {
+    if (
+      canManageCalendar &&
+      (input.syncCalendar !== undefined || task.calendarEntryId)
+    ) {
       revalidatePath("/calendar");
     }
 
@@ -828,32 +1055,34 @@ export async function deleteTask(input: {
   id: number;
 }): Promise<ActionResult<{ id: number }>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const taskRows = await db
+    const [task] = await db
       .select({
         id: kanbanTasks.id,
+        boardId: kanbanTasks.boardId,
+        userId: kanbanTasks.userId,
         calendarEntryId: kanbanTasks.calendarEntryId,
       })
       .from(kanbanTasks)
-      .where(
-        and(eq(kanbanTasks.id, input.id), eq(kanbanTasks.userId, userId)),
-      )
+      .where(eq(kanbanTasks.id, input.id))
       .limit(1);
 
-    const task = taskRows[0];
     if (!task) return { ok: false, error: "That task no longer exists." };
 
-    if (task.calendarEntryId) {
-      await deleteCalendarEntry(userId, task.calendarEntryId);
+    const access = await getBoardAccess(profile, task.boardId);
+    if (!access) return { ok: false, error: "That task no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
     }
 
-    await db
-      .delete(kanbanTasks)
-      .where(
-        and(eq(kanbanTasks.id, input.id), eq(kanbanTasks.userId, userId)),
-      );
+    if (task.calendarEntryId) {
+      await deleteCalendarEntry(task.userId, task.calendarEntryId);
+    }
+
+    await db.delete(kanbanTasks).where(eq(kanbanTasks.id, input.id));
+    await deleteTaskThreads(task.boardId, task.id);
 
     revalidatePath("/tasks");
     revalidatePath("/calendar");
@@ -868,50 +1097,48 @@ export async function moveTask(input: {
   columnId: number;
 }): Promise<ActionResult<KanbanTask>> {
   try {
-    const userId = await resolveCurrentUserId();
-    if (!userId) return { ok: false, error: "No user found." };
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
 
-    const taskRows = await db
+    const [task] = await db
       .select()
       .from(kanbanTasks)
-      .where(
-        and(eq(kanbanTasks.id, input.id), eq(kanbanTasks.userId, userId)),
-      )
+      .where(eq(kanbanTasks.id, input.id))
       .limit(1);
 
-    const task = taskRows[0];
     if (!task) return { ok: false, error: "That task no longer exists." };
+
+    const access = await getBoardAccess(profile, task.boardId);
+    if (!access) return { ok: false, error: "That task no longer exists." };
+    if (!canEditBoard(access.role)) {
+      return { ok: false, error: "You have view-only access to this board." };
+    }
 
     if (task.columnId === input.columnId) {
       return { ok: true, data: toTask(task) };
     }
 
-    const columnRows = await db
+    const [column] = await db
       .select({ id: kanbanColumns.id })
       .from(kanbanColumns)
       .where(
         and(
           eq(kanbanColumns.id, input.columnId),
           eq(kanbanColumns.boardId, task.boardId),
-          eq(kanbanColumns.userId, userId),
         ),
       )
       .limit(1);
 
-    if (!columnRows[0]) {
-      return { ok: false, error: "That column no longer exists." };
-    }
+    if (!column) return { ok: false, error: "That column no longer exists." };
 
     const [row] = await db
       .update(kanbanTasks)
       .set({
         columnId: input.columnId,
-        position: await nextTaskPosition(userId, input.columnId),
+        position: await nextTaskPosition(input.columnId),
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(kanbanTasks.id, input.id), eq(kanbanTasks.userId, userId)),
-      )
+      .where(eq(kanbanTasks.id, input.id))
       .returning();
 
     if (!row) return { ok: false, error: "That task no longer exists." };

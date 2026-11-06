@@ -97,6 +97,39 @@ export const kanbanBoards = pgTable(
   ],
 );
 
+/**
+ * Board sharing is stored in Postgres so permissions survive Liveblocks
+ * reconnects and can be checked by every server action.
+ *
+ * `userId` is filled in when the invited email already belongs to an account.
+ * Pending invites keep it `null`; access is granted by matching `email` when
+ * that person signs in for the first time.
+ */
+export const kanbanBoardMembers = pgTable(
+  "kanban_board_members",
+  {
+    id: serial("id").primaryKey(),
+    boardId: integer("board_id")
+      .notNull()
+      .references(() => kanbanBoards.id, { onDelete: "cascade" }),
+    userId: integer("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    email: text("email").notNull(),
+    role: text("role").notNull().default("editor"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("kanban_board_members_board_email_idx").on(
+      table.boardId,
+      table.email,
+    ),
+    index("kanban_board_members_board_idx").on(table.boardId),
+    index("kanban_board_members_user_idx").on(table.userId),
+    index("kanban_board_members_email_idx").on(table.email),
+  ],
+);
+
 /** A board owns an ordered list of columns (Todo, In Progress, Done, …). */
 export const kanbanColumns = pgTable(
   "kanban_columns",
@@ -171,6 +204,9 @@ export type NewCalendarEntry = typeof calendarEntries.$inferInsert;
 
 export type KanbanBoard = typeof kanbanBoards.$inferSelect;
 export type NewKanbanBoard = typeof kanbanBoards.$inferInsert;
+
+export type KanbanBoardMember = typeof kanbanBoardMembers.$inferSelect;
+export type NewKanbanBoardMember = typeof kanbanBoardMembers.$inferInsert;
 
 export type KanbanColumn = typeof kanbanColumns.$inferSelect;
 export type NewKanbanColumn = typeof kanbanColumns.$inferInsert;

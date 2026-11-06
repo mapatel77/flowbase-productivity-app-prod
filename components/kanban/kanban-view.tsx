@@ -26,8 +26,8 @@ import {
   updateColumn,
   updateTask,
 } from "@/app/tasks/actions";
-import { BoardCanvas } from "@/components/kanban/board-canvas";
 import { BoardDialog, type BoardFormValues } from "@/components/kanban/board-dialog";
+import { BoardRoom } from "@/components/kanban/board-room";
 import { BoardSidebar } from "@/components/kanban/board-sidebar";
 import { ColumnDialog } from "@/components/kanban/column-dialog";
 import { DeleteDialog } from "@/components/kanban/delete-dialog";
@@ -562,6 +562,7 @@ export function KanbanView({ initialData }: KanbanViewProps) {
   return (
     <Toaster>
       <DndContext
+        id={`task-board-${activeBoard?.id ?? "default"}`}
         sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -619,10 +620,11 @@ export function KanbanView({ initialData }: KanbanViewProps) {
 
             <div className="min-w-0">
               {activeBoard ? (
-                <BoardCanvas
+                <BoardRoom
                   board={activeBoard}
                   columns={boardColumns}
                   tasks={boardTasks}
+                  viewer={initialData.viewer}
                   onAddColumn={() =>
                     setColumnDialog({
                       mode: "create",
