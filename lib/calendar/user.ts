@@ -49,17 +49,33 @@ async function resolveDemoUser() {
 }
 
 /**
- * Returns the `users.id` that owns the calendar, or `null` when there is no
- * user at all (for example when the database is unreachable).
+ * The database identity behind the current request. `name` can be `null` for
+ * providers that do not supply one.
  */
-export async function resolveCurrentUserId(): Promise<number | null> {
+export type CurrentUserProfile = {
+  id: number;
+  name: string | null;
+  email: string;
+};
+
+/**
+ * Returns the profile that owns the workspace, or `null` when there is no user
+ * at all (for example when the database is unreachable).
+ */
+export async function resolveCurrentUserProfile(): Promise<CurrentUserProfile | null> {
   if (isClerkConfigured) {
     try {
       const { userId } = await auth();
 
       if (userId) {
         const existing = await findUserByClerkId(userId);
-        if (existing) return existing.id;
+        if (existing) {
+          return {
+            id: existing.id,
+            name: existing.name,
+            email: existing.email,
+          };
+        }
 
         // The user signed in but has not been synced yet — do it now.
         try {
@@ -85,7 +101,13 @@ export async function resolveCurrentUserId(): Promise<number | null> {
               })
               .returning();
 
-            if (upserted) return upserted.id;
+            if (upserted) {
+              return {
+                id: upserted.id,
+                name: upserted.name,
+                email: upserted.email,
+              };
+            }
           }
         } catch (error) {
           console.error("Failed to sync Clerk user", error);
@@ -98,11 +120,21 @@ export async function resolveCurrentUserId(): Promise<number | null> {
 
   try {
     const demo = await resolveDemoUser();
-    return demo?.id ?? null;
+    if (!demo) return null;
+
+    return { id: demo.id, name: demo.name, email: demo.email };
   } catch (error) {
     console.error("Failed to resolve the current user", error);
     return null;
   }
+}
+
+/**
+ * Returns the `users.id` that owns the workspace, or `null` when there is no
+ * user at all (for example when the database is unreachable).
+ */
+export async function resolveCurrentUserId(): Promise<number | null> {
+  return (await resolveCurrentUserProfile())?.id ?? null;
 }
 
 /** Used by the category seeding helper to avoid duplicate defaults. */

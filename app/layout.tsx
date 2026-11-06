@@ -1,6 +1,7 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { Fraunces, Nunito } from 'next/font/google';
 import { AppShell } from '@/components/app-shell';
+import { CollaborationProvider } from '@/components/liveblocks/collaboration-provider';
 import { UserSync } from '@/components/user-sync';
 import "./globals.css";
 import type { Metadata } from "next";
@@ -27,6 +28,8 @@ const isClerkConfigured =
   !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && 
   !!process.env.CLERK_SECRET_KEY;
 
+const isLiveblocksConfigured = !!process.env.LIVEBLOCKS_SECRET_KEY;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -36,7 +39,9 @@ export default function RootLayout({
     <html lang="en" className={`${nunito.variable} ${fraunces.variable}`}>
       <body style={{ margin: 0, padding: 0 }}>
         {isClerkConfigured ? <UserSync /> : null}
-        <AppShell>{children}</AppShell>
+        <CollaborationProvider enabled={isLiveblocksConfigured}>
+          <AppShell>{children}</AppShell>
+        </CollaborationProvider>
       </body>
     </html>
   );

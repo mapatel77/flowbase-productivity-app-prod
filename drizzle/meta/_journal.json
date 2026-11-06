@@ -15,6 +15,13 @@
       "when": 1793705452016,
       "tag": "0001_fine_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793711152366,
+      "tag": "0002_smiling_purifiers",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   CalendarDays,
   Flag,
+  MessageSquare,
   MoreHorizontal,
   NotebookPen,
   Pencil,
@@ -28,6 +29,8 @@ type TaskCardBodyProps = {
   task: KanbanTask;
   columnName: string;
   className?: string;
+  commentCount?: number;
+  onOpenComments?: () => void;
 };
 
 /** The visual part of a task card, reused by the drag overlay. */
@@ -35,6 +38,8 @@ export function TaskCardBody({
   task,
   columnName,
   className,
+  commentCount = 0,
+  onOpenComments,
 }: TaskCardBodyProps) {
   const priorityTone = PRIORITY_TONES[task.priority];
   const overdue =
@@ -125,6 +130,27 @@ export function TaskCardBody({
             Notes
           </span>
         ) : null}
+
+        {onOpenComments ? (
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenComments();
+            }}
+            aria-label={`Open comments (${commentCount})`}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+              commentCount > 0
+                ? "bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:hover:bg-violet-500/25"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            <MessageSquare className="size-2.5" />
+            {commentCount}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -133,16 +159,20 @@ export function TaskCardBody({
 type TaskCardProps = {
   task: KanbanTask;
   columnName: string;
+  commentCount?: number;
   onOpen: (task: KanbanTask) => void;
   onDelete: (task: KanbanTask) => void;
+  onOpenComments?: (task: KanbanTask) => void;
 };
 
 /** A draggable task card. Clicking the card opens the edit dialog. */
 export function TaskCard({
   task,
   columnName,
+  commentCount = 0,
   onOpen,
   onDelete,
+  onOpenComments,
 }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `task:${task.id}`,
@@ -154,18 +184,30 @@ export function TaskCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(task)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(task);
+        }
+      }}
       className={cn(
         "group/card relative touch-pan-y rounded-xl transition-opacity focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
         isDragging && "opacity-40",
       )}
     >
-      <button
-        type="button"
-        onClick={() => onOpen(task)}
-        className="block w-full cursor-grab touch-pan-y rounded-xl text-left focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none active:cursor-grabbing"
-      >
-        <TaskCardBody task={task} columnName={columnName} className="pr-9" />
-      </button>
+      <TaskCardBody
+        task={task}
+        columnName={columnName}
+        className="cursor-grab pr-9 active:cursor-grabbing"
+        commentCount={commentCount}
+        onOpenComments={
+          onOpenComments ? () => onOpenComments(task) : undefined
+        }
+      />
 
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -176,6 +218,7 @@ export function TaskCard({
               className="absolute top-1.5 right-1.5 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover/card:opacity-100 focus-visible:opacity-100"
               aria-label={`${task.title} options`}
               onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
             />
           }
         >

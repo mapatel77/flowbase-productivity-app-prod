@@ -1,6 +1,13 @@
 "use client";
 
-import { MoreHorizontal, Pencil, Plus, SquareKanban, Trash2 } from "lucide-react";
+import {
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  SquareKanban,
+  Trash2,
+  Users,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +88,7 @@ export function BoardSidebar({
           boards.map((board) => {
             const tone = categoryTones[board.color];
             const selected = board.id === activeBoardId;
+            const isOwner = board.accessRole === "owner";
             const columnCount = columns.filter(
               (column) => column.boardId === board.id,
             ).length;
@@ -116,37 +124,47 @@ export function BoardSidebar({
                     <span className="block truncate text-[10px] text-muted-foreground">
                       {columnCount} column{columnCount === 1 ? "" : "s"} ·{" "}
                       {taskCount} task{taskCount === 1 ? "" : "s"}
+                      {!isOwner ? " · shared" : ""}
                     </span>
                   </span>
                 </button>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label={`${board.name} options`}
-                        className="text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
-                      />
-                    }
+                {!isOwner ? (
+                  <span
+                    title="Shared with you"
+                    className="flex size-6 shrink-0 items-center justify-center rounded-lg text-sky-600 dark:text-sky-300"
                   >
-                    <MoreHorizontal />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(board)}>
-                      <Pencil />
-                      Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => onDelete(board)}
+                    <Users className="size-3.5" />
+                  </span>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={`${board.name} options`}
+                          className="text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+                        />
+                      }
                     >
-                      <Trash2 />
-                      Delete board
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <MoreHorizontal />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(board)}>
+                        <Pencil />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => onDelete(board)}
+                      >
+                        <Trash2 />
+                        Delete board
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             );
           })

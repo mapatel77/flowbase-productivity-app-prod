@@ -22,21 +22,27 @@ import { cn } from "@/lib/utils";
 type BoardColumnProps = {
   column: KanbanColumnRecord;
   tasks: KanbanTask[];
+  canEdit?: boolean;
+  commentCounts?: Record<number, number>;
   onAddTask: (columnId: number) => void;
   onEditColumn: (column: KanbanColumnRecord) => void;
   onDeleteColumn: (column: KanbanColumnRecord) => void;
   onOpenTask: (task: KanbanTask) => void;
   onDeleteTask: (task: KanbanTask) => void;
+  onOpenComments?: (task: KanbanTask) => void;
 };
 
 export function BoardColumn({
   column,
   tasks,
+  canEdit = true,
+  commentCounts,
   onAddTask,
   onEditColumn,
   onDeleteColumn,
   onOpenTask,
   onDeleteTask,
+  onOpenComments,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column:${column.id}`,
@@ -71,38 +77,43 @@ export function BoardColumn({
           size="icon-xs"
           onClick={() => onAddTask(column.id)}
           aria-label={`Add task to ${column.name}`}
-          className="text-muted-foreground hover:text-foreground"
+          className={cn(
+            "text-muted-foreground hover:text-foreground",
+            !canEdit && "hidden",
+          )}
         >
           <Plus />
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`${column.name} options`}
-                className="text-muted-foreground hover:text-foreground"
-              />
-            }
-          >
-            <MoreHorizontal />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEditColumn(column)}>
-              <Pencil />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => onDeleteColumn(column)}
+        {canEdit ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${column.name} options`}
+                  className="text-muted-foreground hover:text-foreground"
+                />
+              }
             >
-              <Trash2 />
-              Delete column
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEditColumn(column)}>
+                <Pencil />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => onDeleteColumn(column)}
+              >
+                <Trash2 />
+                Delete column
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </header>
 
       <div className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
@@ -111,34 +122,44 @@ export function BoardColumn({
             key={task.id}
             task={task}
             columnName={column.name}
+            commentCount={commentCounts?.[task.id] ?? 0}
             onOpen={onOpenTask}
             onDelete={onDeleteTask}
+            onOpenComments={onOpenComments}
           />
         ))}
 
         {tasks.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => onAddTask(column.id)}
-            className="flex min-h-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/70 bg-card/30 p-3 text-center text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
-          >
-            <Plus className="size-3.5" />
-            <span>Drop tasks here or add one</span>
-          </button>
+          canEdit ? (
+            <button
+              type="button"
+              onClick={() => onAddTask(column.id)}
+              className="flex min-h-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/70 bg-card/30 p-3 text-center text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+            >
+              <Plus className="size-3.5" />
+              <span>Drop tasks here or add one</span>
+            </button>
+          ) : (
+            <p className="flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/30 p-3 text-center text-[11px] text-muted-foreground">
+              No tasks yet
+            </p>
+          )
         ) : null}
       </div>
 
-      <div className="p-2 pt-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onAddTask(column.id)}
-          className="w-full justify-start gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Plus className="size-3.5" />
-          Add task
-        </Button>
-      </div>
+      {canEdit ? (
+        <div className="p-2 pt-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onAddTask(column.id)}
+            className="w-full justify-start gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="size-3.5" />
+            Add task
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }
