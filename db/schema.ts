@@ -12,6 +12,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import type { NoteDocument } from "@/lib/notes/types";
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   clerkId: text("clerk_id").notNull().unique(),
@@ -19,6 +21,36 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+/**
+ * Notes are soft deleted so the Trash section can restore them with their full
+ * document intact. `content` stores Tiptap JSON, while `plainText` is kept in
+ * sync for fast client-side title + body search.
+ */
+export const notes = pgTable(
+  "notes",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("Untitled note"),
+    color: text("color").notNull().default("amber"),
+    content: jsonb("content")
+      .$type<NoteDocument>()
+      .notNull()
+      .default({ type: "doc", content: [{ type: "paragraph" }] }),
+    plainText: text("plain_text").notNull().default(""),
+    pinned: boolean("pinned").notNull().default(false),
+    deletedAt: timestamp("deleted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("notes_user_idx").on(table.userId),
+    index("notes_user_deleted_idx").on(table.userId, table.deletedAt),
+  ],
+);
 
 /**
  * Categories are fully user managed: a user creates, renames, recolours and
@@ -195,6 +227,9 @@ export const kanbanTasks = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+export type NoteRow = typeof notes.$inferSelect;
+export type NewNote = typeof notes.$inferInsert;
 
 export type CalendarCategory = typeof calendarCategories.$inferSelect;
 export type NewCalendarCategory = typeof calendarCategories.$inferInsert;
