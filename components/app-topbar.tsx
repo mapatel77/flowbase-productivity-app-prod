@@ -41,7 +41,7 @@ export function AppTopbar() {
           <Input
             type="search"
             placeholder="Search pages, notes and boards…"
-            className="h-9 rounded-xl border-border/80 bg-card/70 pl-9 text-sm shadow-none"
+            className="h-9 rounded-lg border-0 bg-muted/45 pl-9 text-sm shadow-none focus-visible:bg-muted/65 focus-visible:ring-1"
           />
           <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             ⌘K

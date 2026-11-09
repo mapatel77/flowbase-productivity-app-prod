@@ -151,3 +151,182 @@
     @apply rounded-2xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_color-mix(in_oklch,var(--foreground)_7%,transparent),0_10px_28px_-14px_color-mix(in_oklch,var(--foreground)_22%,transparent)];
     }
   }
+@layer utilities {
+  .note-toolbar-scroll {
+    scrollbar-width: none;
+  }
+
+  .note-toolbar-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .note-prose {
+    min-height: 52vh;
+    color: var(--foreground);
+    font-size: 1rem;
+    line-height: 1.8;
+    outline: none;
+  }
+
+  .note-prose:focus {
+    outline: none;
+  }
+
+  .note-prose > * + * {
+    margin-top: 0.7em;
+  }
+
+  .note-prose p {
+    margin: 0.35rem 0;
+  }
+
+  .note-prose h1,
+  .note-prose h2,
+  .note-prose h3 {
+    color: var(--foreground);
+    font-family: var(--font-heading);
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .note-prose h1 {
+    margin-top: 1.25rem;
+    font-size: 1.85rem;
+  }
+
+  .note-prose h2 {
+    margin-top: 1.15rem;
+    font-size: 1.45rem;
+  }
+
+  .note-prose h3 {
+    margin-top: 1rem;
+    font-size: 1.18rem;
+  }
+
+  .note-prose ul,
+  .note-prose ol {
+    padding-left: 1.4rem;
+  }
+
+  .note-prose ul {
+    list-style: disc;
+  }
+
+  .note-prose ol {
+    list-style: decimal;
+  }
+
+  .note-prose li {
+    margin: 0.2rem 0;
+    padding-left: 0.15rem;
+  }
+
+  .note-prose li > p {
+    margin: 0;
+  }
+
+  .note-prose blockquote {
+    margin: 1rem 0;
+    border-left: 2px solid color-mix(in oklch, var(--primary) 55%, transparent);
+    padding: 0.15rem 0 0.15rem 1rem;
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+
+  .note-prose code {
+    border-radius: 0.35rem;
+    background: color-mix(in oklch, var(--muted) 80%, transparent);
+    padding: 0.12rem 0.32rem;
+    color: color-mix(in oklch, var(--foreground) 88%, var(--primary));
+    font-size: 0.86em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .note-prose pre {
+    margin: 0.9rem 0;
+    overflow-x: auto;
+    border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
+    border-radius: 0.9rem;
+    background: color-mix(in oklch, var(--muted) 68%, transparent);
+    padding: 0.9rem 1rem;
+    line-height: 1.6;
+  }
+
+  .note-prose pre code {
+    background: transparent;
+    padding: 0;
+    color: var(--foreground);
+    font-size: 0.84rem;
+  }
+
+  .note-prose hr {
+    margin: 1.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .note-prose a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .note-prose mark {
+    border-radius: 0.22rem;
+    background: color-mix(in oklch, var(--chart-5) 42%, transparent);
+    padding: 0 0.12em;
+    color: inherit;
+  }
+
+  .note-prose p.is-editor-empty:first-child::before {
+    float: left;
+    height: 0;
+    color: var(--muted-foreground);
+    content: attr(data-placeholder);
+    pointer-events: none;
+  }
+
+  .note-prose ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0.15rem;
+  }
+
+  .note-prose ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding-left: 0;
+  }
+
+  .note-prose ul[data-type="taskList"] li > label {
+    margin-top: 0.28rem;
+    flex: 0 0 auto;
+    user-select: none;
+  }
+
+  .note-prose ul[data-type="taskList"] li > div {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .note-prose ul[data-type="taskList"] input[type="checkbox"] {
+    width: 0.95rem;
+    height: 0.95rem;
+    accent-color: var(--primary);
+    cursor: pointer;
+  }
+
+  .note-prose ul[data-type="taskList"] li[data-checked="true"] > div {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+  }
+
+  .note-prose .ProseMirror-selectednode {
+    border-radius: 0.4rem;
+    outline: 2px solid color-mix(in oklch, var(--primary) 45%, transparent);
+    outline-offset: 2px;
+  }
+}
