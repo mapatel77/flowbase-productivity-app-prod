@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type { NoteDocument } from "@/lib/notes/types";
+import type { WhiteboardScene } from "@/lib/whiteboard/types";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -225,6 +226,34 @@ export const kanbanTasks = pgTable(
   ],
 );
 
+/**
+ * Whiteboards are infinite-canvas boards backed by Excalidraw scenes. The
+ * scene blob keeps the element list, the (serializable) app state and the
+ * uploaded image payloads, so boards survive reloads without realtime.
+ */
+export const whiteboards = pgTable(
+  "whiteboards",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default("Untitled whiteboard"),
+    color: text("color").notNull().default("emerald"),
+    scene: jsonb("scene")
+      .$type<WhiteboardScene>()
+      .notNull()
+      .default({
+        elements: [],
+        appState: { viewBackgroundColor: "#fbfaf7", gridSize: 20 },
+        files: {},
+      }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("whiteboards_user_idx").on(table.userId)],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -248,3 +277,6 @@ export type NewKanbanColumn = typeof kanbanColumns.$inferInsert;
 
 export type KanbanTask = typeof kanbanTasks.$inferSelect;
 export type NewKanbanTask = typeof kanbanTasks.$inferInsert;
+
+export type WhiteboardRow = typeof whiteboards.$inferSelect;
+export type NewWhiteboard = typeof whiteboards.$inferInsert;
