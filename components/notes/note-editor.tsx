@@ -32,6 +32,8 @@ import {
   useNoteAutosave,
   type NoteSnapshot,
 } from "@/components/notes/use-note-autosave";
+import { VoiceButton } from "@/components/shared/voice-button";
+import { VoiceTranscript } from "@/components/shared/voice-transcript";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -162,7 +164,7 @@ export function NoteEditor({
     ],
     editorProps: {
       attributes: {
-        class: "note-prose min-h-[52vh] focus:outline-none",
+        class: "editor-prose min-h-[52vh] focus:outline-none",
         "aria-label": "Note body",
         spellcheck: "true",
       },
@@ -485,56 +487,12 @@ export function NoteEditor({
           </div>
 
           <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => void toggleVoice()}
-              disabled={voiceStatus === "stopping"}
-              aria-label={
-                isRecording
-                  ? "Stop recording"
-                  : voiceStatus === "connecting"
-                    ? "Cancel connecting"
-                    : "Speak to Note"
-              }
-              aria-pressed={isRecording}
-              title={
-                isRecording
-                  ? "Stop recording"
-                  : voiceStatus === "connecting"
-                    ? "Cancel connecting"
-                    : "Speak to Note"
-              }
-              className={cn(
-                "h-7 gap-1.5 rounded-full border px-2 text-[11px] font-medium",
-                isRecording
-                  ? "border-rose-500/40 bg-rose-500/10 text-rose-600 hover:bg-rose-500/15 dark:text-rose-300"
-                  : "border-border/60 bg-background/40 text-muted-foreground hover:text-foreground",
-                voiceStatus === "connecting" &&
-                  "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-              )}
-            >
-              {voiceStatus === "connecting" || voiceStatus === "stopping" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : isRecording ? (
-                <span className="relative flex size-3.5 items-center justify-center">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-rose-500/40" />
-                  <Mic className="relative size-3.5 animate-pulse" />
-                </span>
-              ) : (
-                <Mic className="size-3.5" />
-              )}
-              <span className="hidden md:inline">
-                {voiceStatus === "connecting"
-                  ? "Cancel"
-                  : voiceStatus === "stopping"
-                    ? "Finishing…"
-                    : isRecording
-                      ? "Stop"
-                      : "Speak to Note"}
-              </span>
-            </Button>
+            <VoiceButton
+              status={voiceStatus}
+              isRecording={isRecording}
+              onToggle={() => void toggleVoice()}
+              label="Speak to Note"
+            />
 
             <Button
               type="button"
@@ -598,66 +556,12 @@ export function NoteEditor({
 
       {voiceActive ? (
         <div className="shrink-0">
-          <div className="mx-auto w-full max-w-3xl px-4 pt-2 md:px-8">
-            <div className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/[0.06] px-3 py-1.5 text-xs">
-              <span
-                className="relative flex size-2 shrink-0 items-center justify-center"
-                aria-hidden="true"
-              >
-                <span
-                  className={cn(
-                    "absolute inline-flex size-2 rounded-full",
-                    voiceStatus === "recording"
-                      ? "animate-ping bg-rose-500/50"
-                      : "bg-amber-500/40",
-                  )}
-                />
-                <span
-                  className={cn(
-                    "relative size-1.5 rounded-full",
-                    voiceStatus === "recording"
-                      ? "bg-rose-500"
-                      : "bg-amber-500",
-                  )}
-                />
-              </span>
-
-              <div className="min-w-0 flex-1">
-                <p
-                  className="font-medium text-foreground/80"
-                  aria-live="polite"
-                >
-                  {voiceStatus === "connecting"
-                    ? "Connecting to AssemblyAI…"
-                    : voiceStatus === "stopping"
-                      ? "Finishing last words…"
-                      : "Listening…"}
-                </p>
-                <p className="truncate text-muted-foreground" aria-live="off">
-                  {partialTranscript ||
-                    (voiceStatus === "connecting"
-                      ? "Allow microphone access if your browser asks."
-                      : voiceStatus === "stopping"
-                        ? "Saving the last finalized phrase…"
-                        : "Start speaking — finalized phrases appear in your note.")}
-                </p>
-              </div>
-
-              {voiceStatus === "recording" ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => void stopVoice()}
-                  aria-label="Stop recording"
-                  className="shrink-0 gap-1 rounded-full text-rose-600 hover:bg-rose-500/10 dark:text-rose-300"
-                >
-                  <Square className="size-2.5 fill-current" />
-                  Stop
-                </Button>
-              ) : null}
-            </div>
-          </div>
+          <VoiceTranscript
+            status={voiceStatus}
+            partialTranscript={partialTranscript}
+            placeholder="Start speaking — finalized phrases appear in your note."
+            onStop={() => void stopVoice()}
+          />
         </div>
       ) : null}
 
