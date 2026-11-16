@@ -227,6 +227,107 @@ export const kanbanTasks = pgTable(
 );
 
 /**
+ * Spaces are the top-level folders of the Pages & Spaces module. Every space
+ * is owned by one user and can be shared with collaborators through
+ * `spaceMembers`.
+ *
+ * `lastOpenedAt` powers the "Recently Opened" filter, while `favorite` and
+ * `archived` keep the two special views on the spaces grid.
+ */
+export const spaces = pgTable(
+  "spaces",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default("Untitled space"),
+    description: text("description"),
+    color: text("color").notNull().default("violet"),
+    favorite: boolean("favorite").notNull().default(false),
+    archived: boolean("archived").notNull().default(false),
+    lastOpenedAt: timestamp("last_opened_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("spaces_user_idx").on(table.userId),
+    index("spaces_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+/**
+ * Sharing is stored in Postgres so permissions survive reloads and can be
+ * checked by every server action.
+ *
+ * `userId` is filled in when the invited email already belongs to an account.
+ * Pending invites keep it `null`; access is granted by matching `email` when
+ * that person signs in for the first time.
+ */
+export const spaceMembers = pgTable(
+  "space_members",
+  {
+    id: serial("id").primaryKey(),
+    spaceId: integer("space_id")
+      .notNull()
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    userId: integer("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    email: text("email").notNull(),
+    role: text("role").notNull().default("editor"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("space_members_space_email_idx").on(table.spaceId, table.email),
+    index("space_members_space_idx").on(table.spaceId),
+    index("space_members_user_idx").on(table.userId),
+    index("space_members_email_idx").on(table.email),
+  ],
+);
+
+/**
+ * A page is a single document that always lives inside exactly one space.
+ * `content` stores the Tiptap document, `plainText` is kept in sync for fast
+ * client-side search, and `template` records the starting point the page was
+ * created from.
+ */
+export const pages = pgTable(
+  "pages",
+  {
+    id: serial("id").primaryKey(),
+    spaceId: integer("space_id")
+      .notNull()
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("Untitled page"),
+    template: text("template").notNull().default("blank"),
+    description: text("description"),
+    content: jsonb("content")
+      .$type<NoteDocument>()
+      .notNull()
+      .default({ type: "doc", content: [{ type: "paragraph" }] }),
+    plainText: text("plain_text").notNull().default(""),
+    favorite: boolean("favorite").notNull().default(false),
+    archived: boolean("archived").notNull().default(false),
+    commentsCount: integer("comments_count").notNull().default(0),
+    linkedTasksCount: integer("linked_tasks_count").notNull().default(0),
+    lastEditedById: integer("last_edited_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("pages_space_idx").on(table.spaceId),
+    index("pages_space_updated_idx").on(table.spaceId, table.updatedAt),
+    index("pages_user_idx").on(table.userId),
+  ],
+);
+
+/**
  * Whiteboards are infinite-canvas boards backed by Excalidraw scenes. The
  * scene blob keeps the element list, the (serializable) app state and the
  * uploaded image payloads, so boards survive reloads without realtime.
@@ -280,3 +381,12 @@ export type NewKanbanTask = typeof kanbanTasks.$inferInsert;
 
 export type WhiteboardRow = typeof whiteboards.$inferSelect;
 export type NewWhiteboard = typeof whiteboards.$inferInsert;
+
+export type SpaceRow = typeof spaces.$inferSelect;
+export type NewSpace = typeof spaces.$inferInsert;
+
+export type SpaceMemberRow = typeof spaceMembers.$inferSelect;
+export type NewSpaceMember = typeof spaceMembers.$inferInsert;
+
+export type PageRow = typeof pages.$inferSelect;
+export type NewPage = typeof pages.$inferInsert;

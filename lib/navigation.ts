@@ -83,11 +83,12 @@ const whiteboard: NavItem = {
 };
 
 const pages: NavItem = {
-  title: "Pages / Spaces",
+  title: "Pages & Spaces",
   href: "/pages",
   icon: Layers,
   iconClassName: "text-indigo-500 dark:text-indigo-400",
-  description: "Organise documents, wikis and boards into shared spaces.",
+  description:
+    "Group documents into spaces, organise pages and share them with your team.",
 };
 
 const templateBuilder: NavItem = {

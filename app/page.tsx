@@ -1,21 +1,32 @@
 import {
   ArrowUpRight,
-  BookOpen,
   Coffee,
+  FileText,
   Layers,
   NotebookPen,
   Plus,
   Rocket,
   Sparkles,
   SquareKanban,
-  Timer,
   TrendingUp,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { connection } from "next/server";
+import { format } from "date-fns";
 
+import { getSpacesData } from "@/app/pages/actions";
+import { getNotesData } from "@/app/notes/actions";
+import { getKanbanData } from "@/app/tasks/actions";
 import { FocusList } from "@/components/dashboard/focus-list";
+import {
+  buildFocusTasks,
+  countTasksDueToday,
+} from "@/components/dashboard/focus-data";
 import { Greeting } from "@/components/dashboard/greeting";
+import { RelativeTime } from "@/components/notes/relative-time";
 import { Button } from "@/components/ui/button";
+import { categoryTones } from "@/lib/calendar/colors";
 import { cn } from "@/lib/utils";
 
 type Tone = {
@@ -46,78 +57,83 @@ const tones: Record<string, Tone> = {
   },
 };
 
-const stats: Array<{
-  label: string;
-  value: string;
-  hint: string;
-  icon: LucideIcon;
-  tone: keyof typeof tones;
-}> = [
-  {
-    label: "Tasks due today",
-    value: "3",
-    hint: "+1 from yesterday",
-    icon: SquareKanban,
-    tone: "sky",
-  },
-  {
-    label: "Focus time",
-    value: "2h 15m",
-    hint: "+24m vs last week",
-    icon: Timer,
-    tone: "emerald",
-  },
-  {
-    label: "Notes captured",
-    value: "18",
-    hint: "4 new this week",
-    icon: NotebookPen,
-    tone: "amber",
-  },
-  {
-    label: "Active spaces",
-    value: "6",
-    hint: "2 shared with team",
-    icon: Layers,
-    tone: "indigo",
-  },
-];
-
-const spaces: Array<{
-  name: string;
-  meta: string;
-  icon: LucideIcon;
-  tone: keyof typeof tones;
-}> = [
-  {
-    name: "Product Roadmap",
-    meta: "12 pages · 4 boards",
-    icon: Layers,
-    tone: "indigo",
-  },
-  {
-    name: "Q4 Launch",
-    meta: "8 pages · 2 boards",
-    icon: Rocket,
-    tone: "rose",
-  },
-  {
-    name: "Personal",
-    meta: "23 notes",
-    icon: Coffee,
-    tone: "emerald",
-  },
-  {
-    name: "Team Wiki",
-    meta: "31 pages",
-    icon: BookOpen,
-    tone: "amber",
-  },
-];
+const spaceIcons: LucideIcon[] = [Layers, Rocket, Coffee, NotebookPen];
 
 const suggestions = ["Summarise my week", "Plan Q4 goals", "Draft a project brief"];
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  // The dashboard shows live workspace numbers, so it is rendered per request.
+  await connection();
+
+  const spacesResult = await getSpacesData();
+  const spaces = spacesResult.ok ? spacesResult.data.spaces : [];
+  const activeSpaces = spaces.filter((space) => !space.archived);
+
+  const kanbanResult = await getKanbanData();
+  const notesResult = await getNotesData();
+
+  const focusTasks = kanbanResult.ok
+    ? buildFocusTasks(
+        kanbanResult.data.boards,
+        kanbanResult.data.columns,
+        kanbanResult.data.tasks,
+      )
+    : [];
+
+  const tasksDueToday = kanbanResult.ok
+    ? countTasksDueToday(
+        kanbanResult.data.boards,
+        kanbanResult.data.columns,
+        kanbanResult.data.tasks,
+      )
+    : 0;
+
+  const notesCount = notesResult.ok
+    ? notesResult.data.filter((note) => !note.deletedAt).length
+    : 0;
+
+  const pageCount = activeSpaces.reduce(
+    (total, space) => total + space.pageCount,
+    0,
+  );
+
+  const stats: Array<{
+    label: string;
+    value: string;
+    hint: string;
+    icon: LucideIcon;
+    tone: keyof typeof tones;
+  }> = [
+    {
+      label: "Tasks due today",
+      value: String(tasksDueToday),
+      hint: `${focusTasks.filter((task) => !task.done).length} still open`,
+      icon: SquareKanban,
+      tone: "sky",
+    },
+    {
+      label: "Pages",
+      value: String(pageCount),
+      hint: `across ${activeSpaces.length} space${activeSpaces.length === 1 ? "" : "s"}`,
+      icon: FileText,
+      tone: "emerald",
+    },
+    {
+      label: "Notes captured",
+      value: String(notesCount),
+      hint: "in your notes library",
+      icon: NotebookPen,
+      tone: "amber",
+    },
+    {
+      label: "Active spaces",
+      value: String(activeSpaces.length),
+      hint: `${activeSpaces.filter((space) => space.favorite).length} favourite`,
+      icon: Layers,
+      tone: "indigo",
+    },
+  ];
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -126,6 +142,7 @@ export default function DashboardPage() {
           <Button
             variant="outline"
             className="h-9 gap-1.5 rounded-xl bg-card/70 px-3.5"
+            render={<Link href="/pages" />}
           >
             <Plus className="size-4" />
             New page
@@ -164,7 +181,10 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <FocusList />
+          <FocusList
+            initialTasks={focusTasks}
+            weekday={format(new Date(), "EEEE")}
+          />
         </div>
 
         <section className="flex flex-col gap-4 rounded-2xl bg-gradient-to-br from-sky-500 via-violet-500 to-fuchsia-500 p-5 text-white shadow-[0_18px_40px_-24px_color-mix(in_oklch,var(--primary)_90%,transparent)]">
@@ -208,42 +228,59 @@ export default function DashboardPage() {
               Jump back into the places you work in
             </p>
           </div>
-          <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-lg text-xs"
+            render={<Link href="/pages" />}
+          >
             View all
             <ArrowUpRight className="size-3.5" />
           </Button>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {spaces.map((space) => (
-            <div
-              key={space.name}
-              className="group flex cursor-pointer flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-4 transition-all hover:-translate-y-0.5 hover:border-border hover:bg-card hover:shadow-[0_10px_24px_-16px_color-mix(in_oklch,var(--foreground)_45%,transparent)]"
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-xl",
-                    tones[space.tone].chip,
-                  )}
-                >
-                  <space.icon className="size-[18px]" />
-                </span>
-                <ArrowUpRight className="size-4 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{space.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{space.meta}</p>
-              </div>
-            </div>
-          ))}
+          {activeSpaces.slice(0, 4).map((space, index) => {
+            const Icon = spaceIcons[index % spaceIcons.length] ?? Layers;
 
-          <div className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/30 p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent/40">
+            return (
+              <Link
+                key={space.id}
+                href={`/pages/${space.id}`}
+                className="group flex flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-4 transition-all hover:-translate-y-0.5 hover:border-border hover:bg-card hover:shadow-[0_10px_24px_-16px_color-mix(in_oklch,var(--foreground)_45%,transparent)]"
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className={cn(
+                      "flex size-9 items-center justify-center rounded-xl",
+                      categoryTones[space.color].chip,
+                    )}
+                  >
+                    <Icon className="size-[18px]" />
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{space.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {space.pageCount} {space.pageCount === 1 ? "page" : "pages"}
+                    {" · updated "}
+                    <RelativeTime value={space.updatedAt} />
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+
+          <Link
+            href="/pages"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/30 p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent/40"
+          >
             <span className="flex size-9 items-center justify-center rounded-xl bg-accent text-accent-foreground">
               <Plus className="size-4" />
             </span>
             <p className="text-xs font-medium text-muted-foreground">New space</p>
-          </div>
+          </Link>
         </div>
       </section>
     </div>
