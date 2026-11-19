@@ -390,3 +390,40 @@ export type NewSpaceMember = typeof spaceMembers.$inferInsert;
 
 export type PageRow = typeof pages.$inferSelect;
 export type NewPage = typeof pages.$inferInsert;
+
+/**
+ * AI Template Builder apps. Each app is a single-page mini app generated from a
+ * user prompt. `config` stores the full AI-generated TemplateAppConfig JSON and
+ * `sidebarPosition` is null unless the user has pinned it to the sidebar
+ * (max 3 pinned apps). Everything is user-scoped.
+ */
+export const templateApps = pgTable(
+  "template_apps",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    appName: text("app_name").notNull(),
+    description: text("description"),
+    icon: text("icon").notNull().default("Layout"),
+    color: text("color").notNull().default("sky"),
+    layout: text("layout").notNull().default("single-page"),
+    config: jsonb("config")
+      .notNull()
+      .default({}),
+    sidebarPosition: integer("sidebar_position"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("template_apps_user_idx").on(table.userId),
+    index("template_apps_user_sidebar_idx").on(
+      table.userId,
+      table.sidebarPosition,
+    ),
+  ],
+);
+
+export type TemplateAppRow = typeof templateApps.$inferSelect;
+export type NewTemplateApp = typeof templateApps.$inferInsert;

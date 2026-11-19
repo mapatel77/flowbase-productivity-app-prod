@@ -1,0 +1,267 @@
+# skill-manifest.yaml
+# AI Coding Skill System — Master Skill Registry
+# Version 1.0 | Updated 2026-06-10
+#
+# This file is the machine-readable index of all skills.
+# Claude Code reads this to enumerate available skills.
+# Each skill's `file_path` is relative to this manifest's location.
+#
+# Usage: Read this file to discover skills, then load the specific
+# skill file pointed to by `file_path` to execute that skill.
+
+manifest_version: "1.0"
+name: "AI Coding Skill System"
+description: "Structured skill system for senior software engineering workflows, covering Define → Plan → Build → Test → Review → Ship"
+last_updated: "2026-06-10"
+total_skills: 12
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE: Define
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - id: "spec-writing"
+    name: "Spec Writing"
+    description: "Authoring comprehensive SPEC.md files with acceptance criteria, context, and clear definitions of done."
+    phase: "define"
+    priority: 1
+    dependencies: []
+    triggers:
+      - "write SPEC"
+      - "create specification"
+      - "define scope"
+      - "SPEC.md"
+      - "spec document"
+      - "spec"
+    file_path: "skills/spec-writing.md"
+    when_to_use: "When starting a new feature, fixing a bug with scope ambiguity, or when requirements are unclear."
+
+  - id: "requirements-analysis"
+    name: "Requirements Analysis"
+    description: "Deep analysis of user needs including edge cases, non-functional requirements, constraints, and implicit assumptions."
+    phase: "define"
+    priority: 2
+    dependencies:
+      - "spec-writing"
+    triggers:
+      - "analyze requirements"
+      - "edge cases"
+      - "non-functional"
+      - "user needs"
+      - "constraints"
+      - "NFR"
+      - "assumptions"
+    file_path: "skills/requirements-analysis.md"
+    when_to_use: "When SPEC.md exists but is shallow or incomplete, or when exploring the problem space before writing code."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE: Plan
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - id: "task-planning"
+    name: "Task Planning"
+    description: "Breaking work into atomic, testable units with clear priorities, dependencies, and acceptance criteria per unit."
+    phase: "plan"
+    priority: 1
+    dependencies:
+      - "requirements-analysis"
+    triggers:
+      - "break down"
+      - "task list"
+      - "work breakdown"
+      - "sprint planning"
+      - "estimate"
+      - "prioritize"
+      - "todo"
+    file_path: "skills/task-planning.md"
+    when_to_use: "When turning requirements into an actionable list of work with clear done-criteria."
+
+  - id: "architecture-design"
+    name: "Architecture Design"
+    description: "System-level design including component boundaries, data models, API contracts, and scalability considerations."
+    phase: "plan"
+    priority: 2
+    dependencies:
+      - "task-planning"
+    triggers:
+      - "architecture"
+      - "system design"
+      - "data model"
+      - "api contract"
+      - "component design"
+      - "high-level design"
+    file_path: "skills/architecture-design.md"
+    when_to_use: "When building new systems, doing significant refactors, or when technical decisions need explicit documentation."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE: Build
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - id: "frontend-ui-dev"
+    name: "Frontend UI Development"
+    description: "Component architecture, accessibility (WCAG 2.1 AA), responsive design, state management, and performance."
+    phase: "build"
+    priority: 1
+    dependencies:
+      - "architecture-design"
+    triggers:
+      - "frontend"
+      - "ui component"
+      - "react"
+      - "vue"
+      - "svelte"
+      - "accessibility"
+      - "responsive"
+      - "wcag"
+      - "css"
+      - "jsx"
+      - "tsx"
+    file_path: "skills/frontend-ui-dev.md"
+    when_to_use: "When implementing user-facing components, UI libraries, or interactive interfaces."
+
+  - id: "backend-api-dev"
+    name: "Backend API Development"
+    description: "REST/GraphQL API design, request validation, response contracts, authentication patterns, and error handling."
+    phase: "build"
+    priority: 2
+    dependencies:
+      - "architecture-design"
+    triggers:
+      - "api"
+      - "endpoint"
+      - "rest"
+      - "graphql"
+      - "backend"
+      - "server"
+      - "request validation"
+    file_path: "skills/backend-api-dev.md"
+    when_to_use: "When creating API endpoints, services, or backend business logic."
+
+  - id: "database-dev"
+    name: "Database Development"
+    description: "Schema design, migration management, query optimization, indexing strategies, and data integrity patterns."
+    phase: "build"
+    priority: 3
+    dependencies:
+      - "architecture-design"
+    triggers:
+      - "database"
+      - "schema"
+      - "migration"
+      - "query"
+      - "sql"
+      - "index"
+      - "postgres"
+      - "mysql"
+      - "mongodb"
+    file_path: "skills/database-dev.md"
+    when_to_use: "When designing data models, writing migrations, creating indexes, or optimizing queries."
+
+  - id: "error-handling"
+    name: "Error Handling"
+    description: "Graceful degradation, structured logging, recovery patterns, retry logic, and observability integration."
+    phase: "build"
+    priority: 4
+    dependencies:
+      - "backend-api-dev"
+    triggers:
+      - "error handling"
+      - "retry"
+      - "fallback"
+      - "logging"
+      - "observability"
+      - "resilience"
+      - "circuit breaker"
+      - "error recovery"
+    file_path: "skills/error-handling.md"
+    when_to_use: "When implementing error responses, building resilient systems, or adding operational visibility."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE: Test
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - id: "testing-tdd"
+    name: "Testing & TDD"
+    description: "Test strategy development, coverage targets, unit/integration/e2e patterns, mocking, and fixture management."
+    phase: "test"
+    priority: 1
+    dependencies:
+      - "backend-api-dev"
+      - "database-dev"
+    triggers:
+      - "test"
+      - "tdd"
+      - "coverage"
+      - "unit test"
+      - "integration test"
+      - "e2e"
+      - "mock"
+      - "fixture"
+      - "jest"
+      - "pytest"
+      - "unittest"
+    file_path: "skills/testing-tdd.md"
+    when_to_use: "When establishing test coverage, writing tests alongside code, or improving existing test suites."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE: Review
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - id: "code-review"
+    name: "Code Review"
+    description: "Systematic code inspection focusing on correctness, maintainability, readability, and knowledge sharing."
+    phase: "review"
+    priority: 1
+    dependencies:
+      - "testing-tdd"
+    triggers:
+      - "code review"
+      - "review changes"
+      - "pull request"
+      - "pr review"
+      - "scrutinize"
+    file_path: "skills/code-review.md"
+    when_to_use: "When reviewing pull requests, pair programming, or self-inspecting code before commit."
+
+  - id: "security-review"
+    name: "Security Review"
+    description: "OWASP Top 10 mitigation, input validation, authentication/authorization patterns, secrets management, and vulnerability identification."
+    phase: "review"
+    priority: 2
+    dependencies:
+      - "testing-tdd"
+    triggers:
+      - "security"
+      - "owasp"
+      - "vulnerability"
+      - "xss"
+      - "injection"
+      - "auth"
+      - "secrets"
+      - "secure"
+    file_path: "skills/security-review.md"
+    when_to_use: "Before any deployment, especially when handling user data, authentication, or external integrations."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE: Ship
+# ─────────────────────────────────────────────────────────────────────────────
+
+  - id: "deployment-handoff"
+    name: "Deployment & Handoff"
+    description: "Release process, rollback planning, monitoring setup, documentation, and cross-team communication."
+    phase: "ship"
+    priority: 1
+    dependencies:
+      - "code-review"
+      - "security-review"
+    triggers:
+      - "deploy"
+      - "release"
+      - "handoff"
+      - "rollback"
+      - "monitoring"
+      - "documentation"
+      - "production"
+      - "cd"
+      - "ci/cd"
+    file_path: "skills/deployment-handoff.md"
+    when_to_use: "When preparing for production deployment, creating release artifacts, or transitioning work to another team."
