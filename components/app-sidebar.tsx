@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SidebarPinnedApps } from "@/components/template-builder/SidebarPinnedApps";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -162,6 +163,7 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroup>
         ))}
+        <SidebarPinnedApps />
       </SidebarContent>
 
       <SidebarFooter className="gap-2 p-2">

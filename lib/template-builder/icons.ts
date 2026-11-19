@@ -1,0 +1,87 @@
+/**
+ * Resolves an icon name string emitted by the AI to a Lucide component.
+ * Unknown names fall back to `Layout`. Imported explicitly so the renderer
+ * never does a dynamic require of user-controlled input.
+ */
+
+import * as Lucide from "lucide-react";
+
+const ICON_REGISTRY: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  Activity: Lucide.Activity,
+  AlertCircle: Lucide.AlertCircle,
+  Archive: Lucide.Archive,
+  Award: Lucide.Award,
+  BarChart3: Lucide.BarChart3,
+  Battery: Lucide.Battery,
+  Bell: Lucide.Bell,
+  BookOpen: Lucide.BookOpen,
+  Briefcase: Lucide.Briefcase,
+  Calendar: Lucide.Calendar,
+  Camera: Lucide.Camera,
+  Check: Lucide.Check,
+  CheckCircle: Lucide.CheckCircle,
+  Clock: Lucide.Clock,
+  Cpu: Lucide.Cpu,
+  CreditCard: Lucide.CreditCard,
+  Crown: Lucide.Crown,
+  Database: Lucide.Database,
+  Delete: Lucide.Delete,
+  DollarSign: Lucide.DollarSign,
+  Download: Lucide.Download,
+  Edit: Lucide.Edit,
+  Eye: Lucide.Eye,
+  Film: Lucide.Film,
+  Flame: Lucide.Flame,
+  Folder: Lucide.Folder,
+  Gift: Lucide.Gift,
+  Globe: Lucide.Globe,
+  Grid: Lucide.Grid,
+  Home: Lucide.Home,
+  Image: Lucide.Image,
+  Layers: Lucide.Layers,
+  Layout: Lucide.Layout,
+  List: Lucide.List,
+  Mail: Lucide.Mail,
+  MapPin: Lucide.MapPin,
+  Maximize: Lucide.Maximize,
+  Menu: Lucide.Menu,
+  Mic: Lucide.Mic,
+  Monitor: Lucide.Monitor,
+  Moon: Lucide.Moon,
+  Music: Lucide.Music,
+  Package: Lucide.Package,
+  Palette: Lucide.Palette,
+  Phone: Lucide.Phone,
+  Play: Lucide.Play,
+  Plus: Lucide.Plus,
+  Rocket: Lucide.Rocket,
+  Save: Lucide.Save,
+  Search: Lucide.Search,
+  Settings: Lucide.Settings,
+  Share: Lucide.Share,
+  Shield: Lucide.Shield,
+  Star: Lucide.Star,
+  Sun: Lucide.Sun,
+  Table: Lucide.Table,
+  Tag: Lucide.Tag,
+  Target: Lucide.Target,
+  Thermometer: Lucide.Thermometer,
+  ThumbsUp: Lucide.ThumbsUp,
+  Trash2: Lucide.Trash2,
+  TrendingUp: Lucide.TrendingUp,
+  Truck: Lucide.Truck,
+  User: Lucide.User,
+  Users: Lucide.Users,
+  Video: Lucide.Video,
+  WandSparkles: Lucide.WandSparkles,
+  Watch: Lucide.Watch,
+  X: Lucide.X,
+  Zap: Lucide.Zap,
+};
+
+export function resolveLucideIcon(
+  name: string | undefined,
+): React.ComponentType<React.SVGProps<SVGSVGElement>> {
+  if (!name) return Lucide.Layout;
+  return ICON_REGISTRY[name] ?? Lucide.Layout;
+}
