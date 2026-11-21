@@ -83,6 +83,11 @@ export function TaskDialog({
   const [done, setDone] = useState(entry?.done ?? false);
   const [dateOpen, setDateOpen] = useState(false);
 
+  const visibleCategories = categories.filter(
+    (category) =>
+      category.scope === (kind === "reminder" ? "reminder" : "calendar"),
+  );
+
   const submit = async () => {
     if (!title.trim() || busy) return;
 
@@ -170,7 +175,10 @@ export function TaskDialog({
               value={[kind]}
               onValueChange={(next) => {
                 const nextKind = next[0];
-                if (nextKind) setKind(nextKind as EntryKind);
+                if (nextKind && nextKind !== kind) {
+                  setKind(nextKind as EntryKind);
+                  setCategoryId(null);
+                }
               }}
               variant="outline"
               size="sm"
@@ -196,7 +204,7 @@ export function TaskDialog({
           <div className="flex flex-col gap-1.5">
             <Label>Category</Label>
             <CategoryPicker
-              categories={categories}
+              categories={visibleCategories}
               value={categoryId}
               onChange={setCategoryId}
             />

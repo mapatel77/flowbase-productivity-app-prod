@@ -35,6 +35,9 @@ export const notes = pgTable(
     userId: integer("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id").references(() => calendarCategories.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull().default("Untitled note"),
     color: text("color").notNull().default("amber"),
     content: jsonb("content")
@@ -68,12 +71,73 @@ export const calendarCategories = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     color: text("color").notNull().default("sky"),
+    /** Which workspace surface owns this category (calendar, task, note, reminder). */
+    scope: text("scope").notNull().default("calendar"),
+    /** Lucide icon name shown beside the category. */
+    icon: text("icon").notNull().default("Tag"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("calendar_categories_user_name_idx").on(table.userId, table.name),
+    uniqueIndex("calendar_categories_user_scope_name_idx").on(
+      table.userId,
+      table.scope,
+      table.name,
+    ),
     index("calendar_categories_user_idx").on(table.userId),
+    index("calendar_categories_user_scope_idx").on(table.userId, table.scope),
   ],
+);
+
+/**
+ * One row of user-scoped settings. Keeping this separate from `users` makes the
+ * settings easy to extend without touching identity data, and gives every
+ * signed-in person a single source of truth for AI, theme and notification
+ * preferences.
+ */
+export const userSettings = pgTable(
+  "user_settings",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    aiModel: text("ai_model").notNull().default("server-default"),
+    aiDefaultMode: text("ai_default_mode").notNull().default("grammar"),
+    aiTone: text("ai_tone").notNull().default("professional"),
+    aiCustomInstructions: text("ai_custom_instructions").notNull().default(""),
+    aiRefineEnabled: boolean("ai_refine_enabled").notNull().default(true),
+    aiAssistantEnabled: boolean("ai_assistant_enabled").notNull().default(true),
+    aiTemplateBuilderEnabled: boolean("ai_template_builder_enabled")
+      .notNull()
+      .default(true),
+    aiDiagramEnabled: boolean("ai_diagram_enabled").notNull().default(true),
+    theme: text("theme").notNull().default("system"),
+    calendarDefaultView: text("calendar_default_view")
+      .notNull()
+      .default("month"),
+    defaultTaskPriority: text("default_task_priority")
+      .notNull()
+      .default("medium"),
+    autoSaveEnabled: boolean("auto_save_enabled").notNull().default(true),
+    notifyTaskReminders: boolean("notify_task_reminders")
+      .notNull()
+      .default(true),
+    notifyDueDates: boolean("notify_due_dates").notNull().default(true),
+    notifyWeeklyDigest: boolean("notify_weekly_digest").notNull().default(false),
+    notifyProductUpdates: boolean("notify_product_updates")
+      .notNull()
+      .default(false),
+    privacyProfileDiscoverable: boolean("privacy_profile_discoverable")
+      .notNull()
+      .default(true),
+    privacyShowActivity: boolean("privacy_show_activity")
+      .notNull()
+      .default(true),
+    privacyAnalytics: boolean("privacy_analytics").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("user_settings_user_idx").on(table.userId)],
 );
 
 /**
@@ -363,6 +427,9 @@ export type NewNote = typeof notes.$inferInsert;
 
 export type CalendarCategory = typeof calendarCategories.$inferSelect;
 export type NewCalendarCategory = typeof calendarCategories.$inferInsert;
+
+export type UserSettingsRow = typeof userSettings.$inferSelect;
+export type NewUserSettings = typeof userSettings.$inferInsert;
 
 export type CalendarEntry = typeof calendarEntries.$inferSelect;
 export type NewCalendarEntry = typeof calendarEntries.$inferInsert;

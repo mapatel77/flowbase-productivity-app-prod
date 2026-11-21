@@ -1,5 +1,6 @@
 "use client";
 
+import { CategoryIcon } from "@/components/shared/category-icon";
 import { categoryTones, COLOR_TOKENS, type ColorToken } from "@/lib/calendar/colors";
 import type { CalendarCategory } from "@/lib/calendar/types";
 import { cn } from "@/lib/utils";
@@ -66,7 +67,6 @@ export function CategoryPicker({
       </button>
 
       {categories.map((category) => {
-        const tone = categoryTones[category.color] ?? categoryTones.sky;
         const selected = value === category.id;
 
         return (
@@ -80,7 +80,10 @@ export function CategoryPicker({
               selected && "border-primary/50 bg-accent/50 ring-1 ring-primary/30",
             )}
           >
-            <span className={cn("size-2.5 shrink-0 rounded-full", tone.dot)} />
+            <CategoryIcon
+              name={category.icon}
+              className="size-3.5 shrink-0 opacity-70"
+            />
             <span className="truncate">{category.name}</span>
           </button>
         );

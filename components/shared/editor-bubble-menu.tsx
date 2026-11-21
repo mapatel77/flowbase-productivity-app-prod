@@ -21,6 +21,7 @@ import {
   Underline,
 } from "lucide-react";
 
+import { usePreferences } from "@/components/preferences-provider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -94,6 +95,7 @@ export function EditorBubbleMenu({
   refining,
   onRefine,
 }: EditorBubbleMenuProps) {
+  const { settings } = usePreferences();
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -160,9 +162,11 @@ export function EditorBubbleMenu({
         <Highlighter />
       </BubbleButton>
 
-      <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
+      {settings.aiRefineEnabled ? (
+        <>
+          <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
-      <DropdownMenu>
+          <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <Button
@@ -183,6 +187,13 @@ export function EditorBubbleMenu({
           {refining ? "Refining…" : "AI Refine"}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem
+            onClick={() => onRefine(settings.aiDefaultMode)}
+            disabled={refining}
+          >
+            <Sparkles />
+            Default · {REFINE_MODE_LABELS[settings.aiDefaultMode]}
+          </DropdownMenuItem>
           {refineActions.map((action) => {
             const Icon = action.icon;
             return (
@@ -203,6 +214,13 @@ export function EditorBubbleMenu({
               Change tone
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-44">
+              <DropdownMenuItem
+                onClick={() => onRefine("tone")}
+                disabled={refining}
+              >
+                <MessageSquareText />
+                Default · {REFINE_TONE_LABELS[settings.aiTone]}
+              </DropdownMenuItem>
               {REFINE_TONES.map((tone) => (
                 <DropdownMenuItem
                   key={tone}
@@ -215,7 +233,9 @@ export function EditorBubbleMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         </DropdownMenuContent>
-      </DropdownMenu>
+          </DropdownMenu>
+        </>
+      ) : null}
     </BubbleMenu>
   );
 }

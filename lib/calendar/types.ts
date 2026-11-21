@@ -9,6 +9,21 @@ export const ENTRY_KINDS = ["task", "reminder"] as const;
 
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
+/**
+ * Category collections are shared by the Calendar, Notes and Kanban modules.
+ * `scope` keeps each module's palette separate while still using one table.
+ */
+export const CATEGORY_SCOPES = ["calendar", "task", "note", "reminder"] as const;
+
+export type CategoryScope = (typeof CATEGORY_SCOPES)[number];
+
+export const CATEGORY_SCOPE_LABELS: Record<CategoryScope, string> = {
+  calendar: "Calendar events",
+  task: "Tasks / Kanban",
+  note: "Notes",
+  reminder: "Reminders",
+};
+
 export type CalendarEntryRecord = {
   id: number;
   userId: number;
@@ -30,6 +45,9 @@ export type CalendarCategoryRecord = {
   userId: number;
   name: string;
   color: ColorToken;
+  scope: CategoryScope;
+  /** Lucide icon name, for example `Briefcase`. */
+  icon: string;
   createdAt: Date;
 };
 

@@ -22,6 +22,8 @@ type UseNoteAutosaveOptions = {
   save: (snapshot: NoteSnapshot) => Promise<ActionResult<NoteSaveResult>>;
   onSaved?: (result: NoteSaveResult, snapshot: NoteSnapshot) => void;
   delay?: number;
+  /** When false, changes are only written on flush, blur or page exit. */
+  enabled?: boolean;
 };
 
 /**
@@ -37,6 +39,7 @@ export function useNoteAutosave({
   save,
   onSaved,
   delay = NOTE_SAVE_DEBOUNCE_MS,
+  enabled = true,
 }: UseNoteAutosaveOptions) {
   const [state, setState] = useState<NoteSaveState>("saved");
   const [lastSavedAt, setLastSavedAt] = useState(initialUpdatedAt);
@@ -110,12 +113,14 @@ export function useNoteAutosave({
       }
 
       if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (!enabled) return;
+
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
         void performSave();
       }, delay);
     },
-    [delay, performSave],
+    [delay, enabled, performSave],
   );
 
   const flush = useCallback(async () => {

@@ -13,6 +13,7 @@ export type NoteDocument = JSONContent;
 export type Note = {
   id: number;
   userId: number;
+  categoryId: number | null;
   title: string;
   color: ColorToken;
   content: NoteDocument;

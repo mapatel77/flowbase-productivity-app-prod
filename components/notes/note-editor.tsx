@@ -7,6 +7,7 @@ import { Placeholder } from "@tiptap/extensions";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
+  Check,
   CheckCircle2,
   CircleAlert,
   Cloud,
@@ -17,6 +18,7 @@ import {
   PanelLeft,
   Pin,
   Square,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +26,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { refineNoteText, saveNote } from "@/app/notes/actions";
 import { NoteBubbleMenu } from "@/components/notes/note-bubble-menu";
 import { NoteColorPopover } from "@/components/notes/note-color-popover";
+import { usePreferences } from "@/components/preferences-provider";
+import { CategoryIcon } from "@/components/shared/category-icon";
 import { NoteEditorToolbar } from "@/components/notes/note-editor-toolbar";
 import { SlashCommand } from "@/components/notes/note-slash-command";
 import { RelativeTime } from "@/components/notes/relative-time";
@@ -44,6 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toast";
 import { categoryTones, type ColorToken } from "@/lib/calendar/colors";
+import type { CalendarCategory } from "@/lib/calendar/types";
 import {
   NOTE_TITLE_MAX_LENGTH,
   REFINE_MODE_LABELS,
@@ -61,11 +66,13 @@ import { cn } from "@/lib/utils";
 
 type NoteEditorProps = {
   note: Note;
+  categories: CalendarCategory[];
   autoFocusTitle?: boolean;
   onOpenList: () => void;
   onSaved: (result: NoteSaveResult, snapshot: NoteSnapshot) => void;
   onTogglePin: () => void;
   onColor: (color: ColorToken) => void;
+  onCategory: (categoryId: number | null) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   registerFlush: (flush: (() => Promise<void>) | null) => void;
@@ -93,15 +100,18 @@ function refinedTextToContent(text: string): JSONContent {
 
 export function NoteEditor({
   note,
+  categories,
   autoFocusTitle = false,
   onOpenList,
   onSaved,
   onTogglePin,
   onColor,
+  onCategory,
   onDuplicate,
   onDelete,
   registerFlush,
 }: NoteEditorProps) {
+  const { settings } = usePreferences();
   const [title, setTitle] = useState(note.title);
   const [plainText, setPlainText] = useState(note.plainText);
   const [refining, setRefining] = useState(false);
@@ -142,6 +152,7 @@ export function NoteEditor({
     initialUpdatedAt: note.updatedAt,
     save: saveSnapshot,
     onSaved: handleSaved,
+    enabled: settings.autoSaveEnabled,
   });
 
   const editor = useEditor({
@@ -407,6 +418,8 @@ export function NoteEditor({
 
   const wordCount = useMemo(() => countWords(plainText), [plainText]);
   const tone = categoryTones[note.color];
+  const category =
+    categories.find((item) => item.id === note.categoryId) ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -457,6 +470,18 @@ export function NoteEditor({
               <span>
                 {wordCount} word{wordCount === 1 ? "" : "s"}
               </span>
+              {category ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <CategoryIcon
+                      name={category.icon}
+                      className="size-3 opacity-70"
+                    />
+                    <span className="truncate">{category.name}</span>
+                  </span>
+                </>
+              ) : null}
               <span aria-hidden="true">·</span>
               <span
                 aria-live="polite"
@@ -512,6 +537,51 @@ export function NoteEditor({
                 fill={note.pinned ? "currentColor" : "none"}
               />
             </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Note category"
+                    title={category?.name ?? "Set note category"}
+                    className={cn(
+                      "text-muted-foreground",
+                      category && "text-foreground",
+                    )}
+                  />
+                }
+              >
+                {category ? (
+                  <CategoryIcon name={category.icon} className="size-4" />
+                ) : (
+                  <Tag className="size-4" />
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={() => onCategory(null)}>
+                  <span className="flex-1">No category</span>
+                  {!category ? <Check className="size-3.5" /> : null}
+                </DropdownMenuItem>
+                {categories.map((item) => (
+                  <DropdownMenuItem
+                    key={item.id}
+                    onClick={() => onCategory(item.id)}
+                  >
+                    <CategoryIcon
+                      name={item.icon}
+                      className="size-3.5 opacity-80"
+                    />
+                    <span className="flex-1 truncate">{item.name}</span>
+                    {note.categoryId === item.id ? (
+                      <Check className="size-3.5" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <NoteColorPopover color={note.color} onChange={onColor} />
 

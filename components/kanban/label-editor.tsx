@@ -23,11 +23,17 @@ import { cn } from "@/lib/utils";
 type LabelEditorProps = {
   labels: KanbanLabel[];
   onChange: (labels: KanbanLabel[]) => void;
+  suggestions?: KanbanLabel[];
   className?: string;
 };
 
 /** Add and remove colour-coded task labels. */
-export function LabelEditor({ labels, onChange, className }: LabelEditorProps) {
+export function LabelEditor({
+  labels,
+  onChange,
+  suggestions = LABEL_SUGGESTIONS,
+  className,
+}: LabelEditorProps) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<ColorToken>("sky");
   const [colorOpen, setColorOpen] = useState(false);
@@ -48,7 +54,7 @@ export function LabelEditor({ labels, onChange, className }: LabelEditorProps) {
     onChange(labels.filter((_, labelIndex) => labelIndex !== index));
   };
 
-  const suggestions = LABEL_SUGGESTIONS.filter(
+  const availableSuggestions = suggestions.filter(
     (suggestion) =>
       !labels.some(
         (label) => label.name.toLowerCase() === suggestion.name.toLowerCase(),
@@ -137,10 +143,10 @@ export function LabelEditor({ labels, onChange, className }: LabelEditorProps) {
         </Button>
       </div>
 
-      {suggestions.length > 0 && labels.length < MAX_TASK_LABELS ? (
+      {availableSuggestions.length > 0 && labels.length < MAX_TASK_LABELS ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground">Quick add</span>
-          {suggestions.slice(0, 4).map((suggestion) => (
+          {availableSuggestions.slice(0, 6).map((suggestion) => (
             <button
               key={suggestion.name}
               type="button"

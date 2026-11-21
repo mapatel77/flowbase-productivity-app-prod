@@ -54,6 +54,7 @@ async function resolveDemoUser() {
  */
 export type CurrentUserProfile = {
   id: number;
+  clerkId: string;
   name: string | null;
   email: string;
 };
@@ -72,6 +73,7 @@ export async function resolveCurrentUserProfile(): Promise<CurrentUserProfile | 
         if (existing) {
           return {
             id: existing.id,
+            clerkId: existing.clerkId,
             name: existing.name,
             email: existing.email,
           };
@@ -104,6 +106,7 @@ export async function resolveCurrentUserProfile(): Promise<CurrentUserProfile | 
             if (upserted) {
               return {
                 id: upserted.id,
+                clerkId: upserted.clerkId,
                 name: upserted.name,
                 email: upserted.email,
               };
@@ -122,7 +125,12 @@ export async function resolveCurrentUserProfile(): Promise<CurrentUserProfile | 
     const demo = await resolveDemoUser();
     if (!demo) return null;
 
-    return { id: demo.id, name: demo.name, email: demo.email };
+    return {
+      id: demo.id,
+      clerkId: demo.clerkId,
+      name: demo.name,
+      email: demo.email,
+    };
   } catch (error) {
     console.error("Failed to resolve the current user", error);
     return null;

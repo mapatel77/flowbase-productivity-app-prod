@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { whiteboards } from "@/db/schema";
 import { isColorToken, type ColorToken } from "@/lib/calendar/colors";
 import { resolveCurrentUserProfile } from "@/lib/calendar/user";
+import { getAiRuntimePreferences } from "@/lib/settings/ai";
 import { WHITEBOARD_DEFAULT_COLOR } from "@/lib/whiteboard/constants";
 import type {
   ActionResult,
@@ -239,10 +240,27 @@ export async function generateAiDiagram(input: {
   prompt: string;
   kind: AiDiagramKind;
 }): Promise<AiDiagramSpec> {
+  const profile = await resolveCurrentUserProfile();
+  if (!profile) {
+    throw new AiDiagramError("No workspace user could be found.");
+  }
+
+  const ai = await getAiRuntimePreferences(profile);
+  if (!ai.settings.aiDiagramEnabled) {
+    throw new AiDiagramError(
+      "AI diagrams are turned off in your Settings.",
+    );
+  }
+
   const prompt = input.prompt.trim();
   if (!prompt) {
     throw new AiDiagramError("Describe the diagram you want first.");
   }
 
-  return generateDiagramWithGemini({ prompt, kind: input.kind });
+  return generateDiagramWithGemini({
+    prompt,
+    kind: input.kind,
+    model: ai.model,
+    customInstructions: ai.customInstructions,
+  });
 }

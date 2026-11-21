@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import { templateApps } from "@/db/schema";
-import { resolveCurrentUserId } from "@/lib/calendar/user";
+import {
+  resolveCurrentUserProfile,
+  resolveCurrentUserId,
+} from "@/lib/calendar/user";
+import { getAiRuntimePreferences } from "@/lib/settings/ai";
 import {
   generateTemplateApp,
   TemplateAppAiError,
@@ -145,7 +149,16 @@ export async function createTemplateAppFromPrompt(input: {
   prompt: string;
 }): Promise<ActionResult<TemplateApp>> {
   try {
-    await requireUserId();
+    const profile = await resolveCurrentUserProfile();
+    if (!profile) return { ok: false, error: "No user found." };
+
+    const ai = await getAiRuntimePreferences(profile);
+    if (!ai.settings.aiTemplateBuilderEnabled) {
+      return {
+        ok: false,
+        error: "AI Template Builder is turned off in your Settings.",
+      };
+    }
 
     const prompt = input.prompt.trim();
     if (!prompt) {
@@ -154,7 +167,10 @@ export async function createTemplateAppFromPrompt(input: {
 
     let config: TemplateAppConfig;
     try {
-      config = await generateTemplateApp(prompt);
+      config = await generateTemplateApp(prompt, {
+        model: ai.model,
+        customInstructions: ai.customInstructions,
+      });
     } catch (error) {
       if (error instanceof TemplateAppAiError) {
         return { ok: false, error: error.message };

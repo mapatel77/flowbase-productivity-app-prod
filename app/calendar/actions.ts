@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import { calendarCategories, calendarEntries } from "@/db/schema";
+import { assertCanCreateResource } from "@/lib/billing/plan";
 import type { ColorToken } from "@/lib/calendar/colors";
-import { isColorToken } from "@/lib/calendar/colors";
 import { normalizeTime } from "@/lib/calendar/dates";
 import type {
   ActionResult,
@@ -16,23 +16,10 @@ import type {
 } from "@/lib/calendar/types";
 import { ENTRY_KINDS } from "@/lib/calendar/types";
 import { resolveCurrentUserId } from "@/lib/calendar/user";
-
-const DEFAULT_CATEGORIES: Array<{ name: string; color: ColorToken }> = [
-  { name: "Work", color: "sky" },
-  { name: "Personal", color: "violet" },
-  { name: "Health", color: "emerald" },
-  { name: "Learning", color: "amber" },
-];
-
-function toCategory(row: typeof calendarCategories.$inferSelect): CalendarCategory {
-  return {
-    id: row.id,
-    userId: row.userId,
-    name: row.name,
-    color: isColorToken(row.color) ? row.color : "sky",
-    createdAt: row.createdAt,
-  };
-}
+import {
+  getCategoriesForScope,
+  toCategory,
+} from "@/lib/settings/queries";
 
 function toEntry(row: typeof calendarEntries.$inferSelect): CalendarEntry {
   return {
@@ -61,35 +48,6 @@ function isEntryKind(value: unknown): value is EntryKind {
   return typeof value === "string" && (ENTRY_KINDS as readonly string[]).includes(value);
 }
 
-/**
- * Gives a brand new user a handful of starter categories. Existing users keep
- * whatever they have set up.
- */
-async function ensureDefaultCategories(
-  userId: number,
-): Promise<CalendarCategory[]> {
-  const existing = await db
-    .select()
-    .from(calendarCategories)
-    .where(eq(calendarCategories.userId, userId))
-    .orderBy(asc(calendarCategories.name));
-
-  if (existing.length > 0) return existing.map(toCategory);
-
-  await db
-    .insert(calendarCategories)
-    .values(DEFAULT_CATEGORIES.map((category) => ({ ...category, userId })))
-    .onConflictDoNothing();
-
-  const seeded = await db
-    .select()
-    .from(calendarCategories)
-    .where(eq(calendarCategories.userId, userId))
-    .orderBy(asc(calendarCategories.name));
-
-  return seeded.map(toCategory);
-}
-
 /** Loads every category and entry that belongs to the current user. */
 export async function getCalendarData(): Promise<
   ActionResult<{ categories: CalendarCategory[]; entries: CalendarEntry[] }>
@@ -98,19 +56,21 @@ export async function getCalendarData(): Promise<
     const userId = await resolveCurrentUserId();
     if (!userId) return { ok: false, error: "No user found." };
 
-    const [categories, entryRows] = await Promise.all([
-      ensureDefaultCategories(userId),
-      db
-        .select()
-        .from(calendarEntries)
-        .where(eq(calendarEntries.userId, userId))
-        .orderBy(asc(calendarEntries.scheduledDate), asc(calendarEntries.id)),
-    ]);
+    const [calendarCategoriesForUser, reminderCategories, entryRows] =
+      await Promise.all([
+        getCategoriesForScope(userId, "calendar"),
+        getCategoriesForScope(userId, "reminder"),
+        db
+          .select()
+          .from(calendarEntries)
+          .where(eq(calendarEntries.userId, userId))
+          .orderBy(asc(calendarEntries.scheduledDate), asc(calendarEntries.id)),
+      ]);
 
     return {
       ok: true,
       data: {
-        categories,
+        categories: [...calendarCategoriesForUser, ...reminderCategories],
         entries: entryRows.map(toEntry),
       },
     };
@@ -132,10 +92,17 @@ export async function createCategory(input: {
 
     const [row] = await db
       .insert(calendarCategories)
-      .values({ userId, name, color: input.color })
+      .values({
+        userId,
+        name,
+        color: input.color,
+        scope: "calendar",
+        icon: "Tag",
+      })
       .returning();
 
     revalidatePath("/calendar");
+    revalidatePath("/settings");
     return { ok: true, data: toCategory(row) };
   } catch (error) {
     return fail(error);
@@ -161,6 +128,7 @@ export async function updateCategory(input: {
         and(
           eq(calendarCategories.id, input.id),
           eq(calendarCategories.userId, userId),
+          eq(calendarCategories.scope, "calendar"),
         ),
       )
       .returning();
@@ -168,6 +136,7 @@ export async function updateCategory(input: {
     if (!row) return { ok: false, error: "That category no longer exists." };
 
     revalidatePath("/calendar");
+    revalidatePath("/settings");
     return { ok: true, data: toCategory(row) };
   } catch (error) {
     return fail(error);
@@ -191,6 +160,7 @@ export async function deleteCategory(input: {
         and(
           eq(calendarCategories.id, input.id),
           eq(calendarCategories.userId, userId),
+          eq(calendarCategories.scope, "calendar"),
         ),
       )
       .returning({ id: calendarCategories.id });
@@ -222,6 +192,9 @@ export async function createEntry(input: EntryInput): Promise<ActionResult<Calen
 
     const title = input.title.trim();
     if (!title) return { ok: false, error: "Give the task a title." };
+
+    const limit = await assertCanCreateResource("calendar");
+    if (!limit.ok) return limit;
 
     const [row] = await db
       .insert(calendarEntries)

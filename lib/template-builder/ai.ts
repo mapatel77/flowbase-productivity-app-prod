@@ -110,6 +110,10 @@ function resolveIconName(icon: string | undefined): string {
 
 export async function generateTemplateApp(
   prompt: string,
+  options: {
+    model?: string;
+    customInstructions?: string;
+  } = {},
 ): Promise<TemplateAppConfig> {
   const key = apiKey();
   if (!key) {
@@ -118,7 +122,8 @@ export async function generateTemplateApp(
     );
   }
 
-  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+  const model =
+    options.model?.trim() || process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const baseUrl = (
     process.env.GEMINI_API_BASE_URL?.trim() || DEFAULT_BASE_URL
   ).replace(/\/$/, "");
@@ -140,7 +145,18 @@ export async function generateTemplateApp(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: systemPrompt() }],
+          parts: [
+            {
+              text: [
+                systemPrompt(),
+                options.customInstructions
+                  ? `The user's standing preferences: ${options.customInstructions}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join("\n"),
+            },
+          ],
         },
         contents: [
           {

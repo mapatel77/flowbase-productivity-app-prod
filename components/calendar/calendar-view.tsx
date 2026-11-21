@@ -34,6 +34,7 @@ import {
   type EntryFormValues,
 } from "@/components/calendar/task-dialog";
 import { WeekGrid } from "@/components/calendar/week-grid";
+import { usePreferences } from "@/components/preferences-provider";
 import { Toaster, toast } from "@/components/ui/toast";
 import { useIsCompactCalendar } from "@/hooks/use-media-query";
 import type { ColorToken } from "@/lib/calendar/colors";
@@ -56,17 +57,22 @@ type DialogState =
 type CalendarViewProps = {
   initialCategories: CalendarCategory[];
   initialEntries: CalendarEntry[];
+  defaultView?: ViewMode;
   loadError?: string | null;
 };
 
 export function CalendarView({
   initialCategories,
   initialEntries,
+  defaultView,
   loadError = null,
 }: CalendarViewProps) {
+  const { settings } = usePreferences();
   const [categories, setCategories] = useState(initialCategories);
   const [entries, setEntries] = useState(initialEntries);
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>(
+    defaultView ?? settings.calendarDefaultView,
+  );
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     toDateKey(new Date()),
@@ -97,6 +103,11 @@ export function CalendarView({
 
   const categoryById = useMemo(
     () => buildCategoryMap(categories),
+    [categories],
+  );
+
+  const managerCategories = useMemo(
+    () => categories.filter((category) => category.scope === "calendar"),
     [categories],
   );
 
@@ -447,7 +458,7 @@ export function CalendarView({
         <CategoryManager
           open={managerOpen}
           onOpenChange={setManagerOpen}
-          categories={categories}
+          categories={managerCategories}
           onCreate={handleCreateCategory}
           onUpdate={handleUpdateCategory}
           onDelete={handleDeleteCategory}
