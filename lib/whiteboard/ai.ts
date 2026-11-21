@@ -241,13 +241,16 @@ function parseDiagramJson(text: string): AiDiagramSpec {
 export async function generateDiagramWithGemini(input: {
   prompt: string;
   kind: AiDiagramKind;
+  model?: string;
+  customInstructions?: string;
 }): Promise<AiDiagramSpec> {
   const key = apiKey();
   if (!key) {
     throw new AiDiagramError(AI_DIAGRAM_NOT_CONFIGURED_MESSAGE);
   }
 
-  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+  const model =
+    input.model?.trim() || process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const baseUrl = (
     process.env.GEMINI_API_BASE_URL?.trim() || DEFAULT_BASE_URL
   ).replace(/\/$/, "");
@@ -258,7 +261,18 @@ export async function generateDiagramWithGemini(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: {
-        parts: [{ text: systemPrompt(input.kind) }],
+        parts: [
+          {
+            text: [
+              systemPrompt(input.kind),
+              input.customInstructions
+                ? `The user's standing preferences: ${input.customInstructions}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
+          },
+        ],
       },
       contents: [
         {

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import { pages, spaceMembers, spaces, users } from "@/db/schema";
+import { assertCanCreateResource } from "@/lib/billing/plan";
 import { isColorToken, type ColorToken } from "@/lib/calendar/colors";
 import {
   resolveCurrentUserProfile,
@@ -33,6 +34,7 @@ import {
   pageTitle,
 } from "@/lib/pages/content";
 import { getTemplateOption, isPageTemplate } from "@/lib/pages/templates";
+import { getAiRuntimePreferences } from "@/lib/settings/ai";
 import { AiRefineError, refineTextWithGemini } from "@/lib/notes/ai";
 import {
   REFINE_MODES,
@@ -561,6 +563,9 @@ export async function createSpace(input: {
     const name = normalizeSpaceName(input.name);
 
     if (!name) return { ok: false, error: "Give the space a name." };
+
+    const limit = await assertCanCreateResource("spaces");
+    if (!limit.ok) return limit;
 
     const [row] = await db
       .insert(spaces)
@@ -1494,15 +1499,25 @@ export async function refinePageText(input: {
       return { ok: false, error: "That AI Refine action is not available." };
     }
 
+    const ai = await getAiRuntimePreferences(profile);
+    if (!ai.settings.aiRefineEnabled) {
+      return {
+        ok: false,
+        error: "AI Refine is turned off in your Settings.",
+      };
+    }
+
     const tone =
       input.tone && (REFINE_TONES as readonly string[]).includes(input.tone)
         ? input.tone
-        : "professional";
+        : ai.settings.aiTone;
 
     const refined = await refineTextWithGemini({
       text,
       mode: input.mode,
       tone,
+      model: ai.model,
+      customInstructions: ai.customInstructions,
     });
 
     return { ok: true, data: { text: refined } };

@@ -12,6 +12,7 @@ import {
   kanbanTasks,
   users,
 } from "@/db/schema";
+import { assertCanCreateResource } from "@/lib/billing/plan";
 import { isDateKey, toDateKey } from "@/lib/calendar/dates";
 import type { ColorToken } from "@/lib/calendar/colors";
 import { isColorToken } from "@/lib/calendar/colors";
@@ -50,6 +51,10 @@ import type {
 import { KANBAN_PRIORITIES } from "@/lib/kanban/types";
 import { deleteBoardRoom, deleteTaskThreads } from "@/lib/liveblocks/server";
 import { getUserColor, getUserDisplayName } from "@/lib/liveblocks/user-color";
+import {
+  getCategoriesForScope,
+  getUserSettings,
+} from "@/lib/settings/queries";
 
 /* ── normalisation ─────────────────────────────────────────────────────── */
 
@@ -168,13 +173,24 @@ export async function getKanbanData(): Promise<ActionResult<KanbanData>> {
     if (!profile) return { ok: false, error: "No user found." };
 
     const viewer = toViewer(profile);
-    const roles = await getAccessibleBoardRoles(profile);
+    const [roles, settings, categories] = await Promise.all([
+      getAccessibleBoardRoles(profile),
+      getUserSettings(profile.id),
+      getCategoriesForScope(profile.id, "task"),
+    ]);
     const boardIds = [...roles.keys()];
 
     if (boardIds.length === 0) {
       return {
         ok: true,
-        data: { viewer, boards: [], columns: [], tasks: [] },
+        data: {
+          viewer,
+          boards: [],
+          columns: [],
+          tasks: [],
+          categories,
+          defaultPriority: settings.defaultTaskPriority,
+        },
       };
     }
 
@@ -214,6 +230,8 @@ export async function getKanbanData(): Promise<ActionResult<KanbanData>> {
         ),
         columns: columnRows.map(toColumn),
         tasks: taskRows.map(toTask),
+        categories,
+        defaultPriority: settings.defaultTaskPriority,
       },
     };
   } catch (error) {
@@ -233,6 +251,9 @@ export async function createBoard(input: {
 
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Give the board a name." };
+
+    const limit = await assertCanCreateResource("boards");
+    if (!limit.ok) return limit;
 
     const color = isColorToken(input.color) ? input.color : "sky";
 

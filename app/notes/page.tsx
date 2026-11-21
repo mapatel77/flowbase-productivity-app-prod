@@ -1,7 +1,7 @@
 import { NotebookPen } from "lucide-react";
 import { connection } from "next/server";
 
-import { getNotesData } from "@/app/notes/actions";
+import { getNoteCategories, getNotesData } from "@/app/notes/actions";
 import { NotesView } from "@/components/notes/notes-view";
 
 export const maxDuration = 30;
@@ -11,7 +11,10 @@ export default async function NotesPage() {
   // and the newest autosaved content.
   await connection();
 
-  const result = await getNotesData();
+  const [result, categoriesResult] = await Promise.all([
+    getNotesData(),
+    getNoteCategories(),
+  ]);
 
   if (!result.ok) {
     return (
@@ -29,5 +32,10 @@ export default async function NotesPage() {
     );
   }
 
-  return <NotesView initialNotes={result.data} />;
+  return (
+    <NotesView
+      initialNotes={result.data}
+      initialCategories={categoriesResult.ok ? categoriesResult.data : []}
+    />
+  );
 }

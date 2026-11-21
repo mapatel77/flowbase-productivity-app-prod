@@ -1,4 +1,5 @@
 import type { ColorToken } from "@/lib/calendar/colors";
+import type { CalendarCategory } from "@/lib/calendar/types";
 
 export const KANBAN_PRIORITIES = ["low", "medium", "high"] as const;
 
@@ -79,6 +80,9 @@ export type KanbanData = {
   boards: KanbanBoard[];
   columns: KanbanColumn[];
   tasks: KanbanTask[];
+  /** Task categories become the label presets inside the task dialog. */
+  categories: CalendarCategory[];
+  defaultPriority: KanbanPriority;
 };
 
 export type ActionResult<T> =

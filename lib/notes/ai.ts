@@ -95,13 +95,16 @@ export async function refineTextWithGemini(input: {
   text: string;
   mode: RefineMode;
   tone: RefineTone;
+  model?: string;
+  customInstructions?: string;
 }): Promise<string> {
   const key = apiKey();
   if (!key) {
     throw new AiRefineError(AI_REFINE_NOT_CONFIGURED_MESSAGE);
   }
 
-  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+  const model =
+    input.model?.trim() || process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const baseUrl = (
     process.env.GEMINI_API_BASE_URL?.trim() || DEFAULT_BASE_URL
   ).replace(/\/$/, "");
@@ -123,7 +126,18 @@ export async function refineTextWithGemini(input: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: systemPrompt() }],
+          parts: [
+            {
+              text: [
+                systemPrompt(),
+                input.customInstructions
+                  ? `The author's standing preferences: ${input.customInstructions}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" "),
+            },
+          ],
         },
         contents: [
           {

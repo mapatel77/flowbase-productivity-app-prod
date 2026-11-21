@@ -21,6 +21,7 @@ import {
   emptyTrash,
   renameNote,
   restoreNote,
+  setNoteCategory,
   setNoteColor,
   setNotePinned,
   softDeleteNote,
@@ -40,11 +41,13 @@ import {
 } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
 import type { ColorToken } from "@/lib/calendar/colors";
+import type { CalendarCategory } from "@/lib/calendar/types";
 import { noteTitle } from "@/lib/notes/content";
 import type { Note, NoteSaveResult } from "@/lib/notes/types";
 
 type NotesViewProps = {
   initialNotes: Note[];
+  initialCategories: CalendarCategory[];
 };
 
 type DeleteTarget =
@@ -106,8 +109,9 @@ function EmptyNotesState({
   );
 }
 
-export function NotesView({ initialNotes }: NotesViewProps) {
+export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
   const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [categories] = useState<CalendarCategory[]>(initialCategories);
   const [search, setSearch] = useState("");
   const [activeNoteId, setActiveNoteId] = useState<number | null>(() => {
     const first = sortActiveNotes(
@@ -313,6 +317,45 @@ export function NotesView({ initialNotes }: NotesViewProps) {
         ),
       );
       console.error("Colour update failed", error);
+    }
+  };
+
+  const handleCategory = async (note: Note, categoryId: number | null) => {
+    setNotes((current) =>
+      current.map((item) =>
+        item.id === note.id ? { ...item, categoryId } : item,
+      ),
+    );
+
+    try {
+      const result = await setNoteCategory({ id: note.id, categoryId });
+
+      if (!result.ok) {
+        setNotes((current) =>
+          current.map((item) =>
+            item.id === note.id
+              ? { ...item, categoryId: note.categoryId }
+              : item,
+          ),
+        );
+        toast.add({
+          title: "Could not change the category",
+          description: result.error,
+          type: "error",
+        });
+        return;
+      }
+
+      replaceNote(result.data);
+    } catch (error) {
+      setNotes((current) =>
+        current.map((item) =>
+          item.id === note.id
+            ? { ...item, categoryId: note.categoryId }
+            : item,
+        ),
+      );
+      console.error("Category update failed", error);
     }
   };
 
@@ -551,6 +594,7 @@ export function NotesView({ initialNotes }: NotesViewProps) {
             <NoteEditor
               key={activeNote.id}
               note={activeNote}
+              categories={categories}
               autoFocusTitle={justCreatedId === activeNote.id}
               onOpenList={() => setMobileOpen(true)}
               onSaved={(result, snapshot) =>
@@ -558,6 +602,9 @@ export function NotesView({ initialNotes }: NotesViewProps) {
               }
               onTogglePin={() => void handleTogglePin(activeNote)}
               onColor={(color) => void handleColor(activeNote, color)}
+              onCategory={(categoryId) =>
+                void handleCategory(activeNote, categoryId)
+              }
               onDuplicate={() => void handleDuplicate(activeNote)}
               onDelete={() =>
                 setDeleteTarget({ kind: "trash", note: activeNote })

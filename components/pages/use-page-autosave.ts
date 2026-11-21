@@ -22,6 +22,8 @@ type UsePageAutosaveOptions = {
   save: (snapshot: PageSnapshot) => Promise<ActionResult<PageSaveResult>>;
   onSaved?: (result: PageSaveResult, snapshot: PageSnapshot) => void;
   delay?: number;
+  /** When false, changes are only written on flush, blur or page exit. */
+  enabled?: boolean;
 };
 
 /**
@@ -37,6 +39,7 @@ export function usePageAutosave({
   save,
   onSaved,
   delay = PAGE_SAVE_DEBOUNCE_MS,
+  enabled = true,
 }: UsePageAutosaveOptions) {
   const [state, setState] = useState<PageSaveState>("saved");
   const [lastSavedAt, setLastSavedAt] = useState(initialUpdatedAt);
@@ -110,12 +113,14 @@ export function usePageAutosave({
       }
 
       if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (!enabled) return;
+
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
         void performSave();
       }, delay);
     },
-    [delay, performSave],
+    [delay, enabled, performSave],
   );
 
   const flush = useCallback(async () => {

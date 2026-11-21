@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { refinePageText, savePageContent } from "@/app/pages/actions";
 import { RelativeTime } from "@/components/notes/relative-time";
+import { usePreferences } from "@/components/preferences-provider";
 import {
   usePageAutosave,
   type PageSnapshot,
@@ -73,6 +74,7 @@ export function PageEditor({
   onSaved,
   registerFlush,
 }: PageEditorProps) {
+  const { settings } = usePreferences();
   const [title, setTitle] = useState(page.title);
   const [wordCount, setWordCount] = useState(0);
   const [refining, setRefining] = useState(false);
@@ -101,6 +103,7 @@ export function PageEditor({
     initialUpdatedAt: page.updatedAt,
     save: saveSnapshot,
     onSaved: (result) => onSaved(result),
+    enabled: settings.autoSaveEnabled,
   });
 
   const editor = useEditor({

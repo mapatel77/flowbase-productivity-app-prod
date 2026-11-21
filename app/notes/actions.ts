@@ -5,8 +5,12 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import { notes } from "@/db/schema";
+import { assertCanCreateResource } from "@/lib/billing/plan";
 import { isColorToken, type ColorToken } from "@/lib/calendar/colors";
+import type { CalendarCategory } from "@/lib/calendar/types";
 import { resolveCurrentUserProfile } from "@/lib/calendar/user";
+import { getAiRuntimePreferences } from "@/lib/settings/ai";
+import { getCategoriesForScope } from "@/lib/settings/queries";
 import {
   AiRefineError,
   refineTextWithGemini,
@@ -48,6 +52,7 @@ function toNote(row: typeof notes.$inferSelect): Note {
   return {
     id: row.id,
     userId: row.userId,
+    categoryId: row.categoryId,
     title: row.title,
     color: isColorToken(row.color) ? row.color : DEFAULT_NOTE_COLOR,
     content: normalizeNoteContent(row.content),
@@ -59,12 +64,27 @@ function toNote(row: typeof notes.$inferSelect): Note {
   };
 }
 
-async function requireUserId() {
+async function requireProfile() {
   const profile = await resolveCurrentUserProfile();
   if (!profile) {
     throw new Error("No workspace user could be found.");
   }
-  return profile.id;
+  return profile;
+}
+
+async function requireUserId() {
+  return (await requireProfile()).id;
+}
+
+export async function getNoteCategories(): Promise<
+  ActionResult<CalendarCategory[]>
+> {
+  try {
+    const userId = await requireUserId();
+    return { ok: true, data: await getCategoriesForScope(userId, "note") };
+  } catch (error) {
+    return fail(error);
+  }
 }
 
 /* ── reads ─────────────────────────────────────────────────────────────── */
@@ -90,6 +110,9 @@ export async function getNotesData(): Promise<ActionResult<Note[]>> {
 export async function createNote(): Promise<ActionResult<Note>> {
   try {
     const userId = await requireUserId();
+
+    const limit = await assertCanCreateResource("notes");
+    if (!limit.ok) return limit;
 
     const [row] = await db
       .insert(notes)
@@ -258,6 +281,35 @@ export async function setNoteColor(input: {
   }
 }
 
+export async function setNoteCategory(input: {
+  id: number;
+  categoryId: number | null;
+}): Promise<ActionResult<Note>> {
+  try {
+    const userId = await requireUserId();
+
+    if (input.categoryId !== null) {
+      const categories = await getCategoriesForScope(userId, "note");
+      if (!categories.some((category) => category.id === input.categoryId)) {
+        return { ok: false, error: "That note category is not available." };
+      }
+    }
+
+    const [row] = await db
+      .update(notes)
+      .set({ categoryId: input.categoryId, updatedAt: new Date() })
+      .where(and(eq(notes.id, input.id), eq(notes.userId, userId)))
+      .returning();
+
+    if (!row) return { ok: false, error: "That note no longer exists." };
+
+    revalidatePath("/notes");
+    return { ok: true, data: toNote(row) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function setNotePinned(input: {
   id: number;
   pinned: boolean;
@@ -375,7 +427,15 @@ export async function refineNoteText(input: {
   tone?: RefineTone;
 }): Promise<ActionResult<{ text: string }>> {
   try {
-    await requireUserId();
+    const profile = await requireProfile();
+    const ai = await getAiRuntimePreferences(profile);
+
+    if (!ai.settings.aiRefineEnabled) {
+      return {
+        ok: false,
+        error: "AI Refine is turned off in your Settings.",
+      };
+    }
 
     const text = input.text.trim();
     if (!text) {
@@ -395,12 +455,14 @@ export async function refineNoteText(input: {
     const tone: RefineTone =
       input.tone && (REFINE_TONES as readonly string[]).includes(input.tone)
         ? input.tone
-        : "professional";
+        : ai.settings.aiTone;
 
     const refined = await refineTextWithGemini({
       text,
       mode: input.mode,
       tone,
+      model: ai.model,
+      customInstructions: ai.customInstructions,
     });
 
     return { ok: true, data: { text: refined } };

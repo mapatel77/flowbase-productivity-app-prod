@@ -107,6 +107,15 @@ export function KanbanView({ initialData }: KanbanViewProps) {
     [tasks, activeBoardId],
   );
 
+  const labelSuggestions = useMemo(
+    () =>
+      initialData.categories.map((category) => ({
+        name: category.name,
+        color: category.color,
+      })),
+    [initialData.categories],
+  );
+
   const taskDialogColumn = useMemo(() => {
     if (!taskDialog) return null;
     const columnId =
@@ -772,6 +781,7 @@ export function KanbanView({ initialData }: KanbanViewProps) {
           }}
           task={taskDialog?.mode === "edit" ? taskDialog.task : null}
           columnName={taskDialogColumn?.name ?? "this column"}
+          labelSuggestions={labelSuggestions}
           busy={busy}
           onSubmit={(values) => {
             if (!taskDialog) return Promise.resolve(false);

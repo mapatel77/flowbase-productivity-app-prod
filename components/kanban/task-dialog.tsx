@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { LabelEditor } from "@/components/kanban/label-editor";
+import { usePreferences } from "@/components/preferences-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -59,6 +60,7 @@ type TaskDialogProps = {
   /** `null` creates a new task. */
   task: KanbanTask | null;
   columnName: string;
+  labelSuggestions?: KanbanLabel[];
   busy?: boolean;
   onSubmit: (values: TaskFormValues) => Promise<boolean>;
   onDelete?: (task: KanbanTask) => Promise<boolean>;
@@ -82,10 +84,12 @@ export function TaskDialog({
   onOpenChange,
   task,
   columnName,
+  labelSuggestions,
   busy = false,
   onSubmit,
   onDelete,
 }: TaskDialogProps) {
+  const { settings } = usePreferences();
   // The parent remounts this dialog with a `key` whenever the target changes.
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
@@ -93,7 +97,7 @@ export function TaskDialog({
     task?.dueDate ?? toDateKey(new Date()),
   );
   const [priority, setPriority] = useState<KanbanPriority>(
-    task?.priority ?? "medium",
+    task?.priority ?? settings.defaultTaskPriority,
   );
   const [labels, setLabels] = useState<KanbanLabel[]>(task?.labels ?? []);
   const [syncCalendar, setSyncCalendar] = useState(
@@ -253,7 +257,11 @@ export function TaskDialog({
 
           <div className="flex flex-col gap-1.5">
             <Label>Labels</Label>
-            <LabelEditor labels={labels} onChange={setLabels} />
+            <LabelEditor
+              labels={labels}
+              onChange={setLabels}
+              suggestions={labelSuggestions}
+            />
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
