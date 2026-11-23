@@ -1,6 +1,5 @@
-import { PlaceholderView } from "@/components/placeholder-view";
-import { getNavItem } from "@/lib/navigation";
+import { AiAssistantPage } from "@/components/ai-assistant/ai-assistant-page";
 
-export default function AiAssistantPage() {
-  return <PlaceholderView item={getNavItem("/ai-assistant")} />;
+export default function AiAssistantPageClient() {
+  return <AiAssistantPage />;
 }

@@ -6,9 +6,10 @@ import { TemplateAppPreview } from "@/components/template-builder/TemplateAppPre
 export default async function TemplateAppPreviewPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const id = Number(params.id);
+  const { id: idParam } = await params;
+  const id = Number(idParam);
   if (!Number.isFinite(id)) {
     notFound();
   }
