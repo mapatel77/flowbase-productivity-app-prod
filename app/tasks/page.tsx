@@ -4,10 +4,29 @@ import { connection } from "next/server";
 import { getKanbanData } from "@/app/tasks/actions";
 import { KanbanView } from "@/components/kanban/kanban-view";
 
-export default async function TasksPage() {
+type TasksPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+export default async function TasksPage({ searchParams }: TasksPageProps) {
   // The task board is always rendered per request so it reflects the signed in
   // user and their latest boards, columns and tasks.
   await connection();
+
+  const params = searchParams ? await searchParams : {};
+  const rawBoardId = firstParam(params.board);
+  const parsedBoardId = rawBoardId ? Number(rawBoardId) : Number.NaN;
+  const initialBoardId =
+    Number.isInteger(parsedBoardId) && parsedBoardId > 0
+      ? parsedBoardId
+      : null;
+  const initialAction = firstParam(params.action);
+  const openTaskOnLoad = initialAction === "create-task";
 
   const result = await getKanbanData();
 
@@ -27,5 +46,11 @@ export default async function TasksPage() {
     );
   }
 
-  return <KanbanView initialData={result.data} />;
+  return (
+    <KanbanView
+      initialData={result.data}
+      initialBoardId={initialBoardId}
+      openTaskOnLoad={openTaskOnLoad}
+    />
+  );
 }

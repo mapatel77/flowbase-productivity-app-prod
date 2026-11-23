@@ -46,7 +46,6 @@ const aiAssistant: NavItem = {
   icon: Sparkles,
   iconClassName: "text-violet-500 dark:text-violet-400",
   description: "Summarise notes, draft pages and plan the week with Flow AI.",
-  badge: "Beta",
 };
 
 const calendar: NavItem = {
@@ -63,7 +62,6 @@ const tasks: NavItem = {
   icon: SquareKanban,
   iconClassName: "text-sky-500 dark:text-sky-400",
   description: "Move work across boards with a calm, colourful kanban flow.",
-  badge: "3",
 };
 
 const notes: NavItem = {

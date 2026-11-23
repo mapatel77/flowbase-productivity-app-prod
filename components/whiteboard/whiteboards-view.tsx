@@ -38,6 +38,7 @@ import type { ColorToken } from "@/lib/calendar/colors";
 
 type WhiteboardsViewProps = {
   initialWhiteboards: Whiteboard[];
+  initialWhiteboardId?: number | null;
 };
 
 const EMPTY_SCENE: WhiteboardScene = {
@@ -45,6 +46,17 @@ const EMPTY_SCENE: WhiteboardScene = {
   appState: { viewBackgroundColor: "#fbfaf7", gridSize: 20 },
   files: {},
 };
+
+function getInitialWhiteboardId(
+  whiteboards: Whiteboard[],
+  requestedId: number | null,
+) {
+  const requestedBoard = requestedId
+    ? whiteboards.find((board) => board.id === requestedId)
+    : null;
+
+  return requestedBoard?.id ?? whiteboards[0]?.id ?? null;
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -57,10 +69,13 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 4_000);
 }
 
-export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
+export function WhiteboardsView({
+  initialWhiteboards,
+  initialWhiteboardId = null,
+}: WhiteboardsViewProps) {
   const [whiteboards, setWhiteboards] = useState<Whiteboard[]>(initialWhiteboards);
-  const [activeId, setActiveId] = useState<number | null>(
-    () => initialWhiteboards[0]?.id ?? null,
+  const [activeId, setActiveId] = useState<number | null>(() =>
+    getInitialWhiteboardId(initialWhiteboards, initialWhiteboardId),
   );
   const [scene, setScene] = useState<WhiteboardScene | null>(null);
   const [saveStatus, setSaveStatus] = useState<WhiteboardSaveStatus>("idle");
@@ -75,13 +90,26 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
   const canvasRef = useRef<WhiteboardCanvasHandle | null>(null);
   const sceneRef = useRef<WhiteboardScene | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeIdRef = useRef<number | null>(null);
+  const activeIdRef = useRef<number | null>(activeId);
+  const requestedWhiteboardIdRef = useRef(initialWhiteboardId);
   const skipNextSaveRef = useRef(false);
 
   const activeBoard = useMemo(
     () => whiteboards.find((board) => board.id === activeId) ?? null,
     [whiteboards, activeId],
   );
+
+  // Follow a new deep-link id when the route changes while the module stays
+  // mounted, without overriding a local selection on unrelated re-renders.
+  useEffect(() => {
+    if (requestedWhiteboardIdRef.current === initialWhiteboardId) return;
+    requestedWhiteboardIdRef.current = initialWhiteboardId;
+    setActiveId(getInitialWhiteboardId(whiteboards, initialWhiteboardId));
+  }, [initialWhiteboardId, whiteboards]);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   /* ── persistence ─────────────────────────────────────────────────────── */
 
@@ -166,6 +194,12 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
 
   /* ── whiteboard actions ──────────────────────────────────────────────── */
 
+  const updateWhiteboardUrl = useCallback((id: number | null) => {
+    const url =
+      id === null ? "/whiteboard" : `/whiteboard?whiteboard=${id}`;
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
   const handleCreate = async () => {
     if (busy) return;
 
@@ -188,6 +222,7 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
       setScene(EMPTY_SCENE);
       setSaveStatus("idle");
       skipNextSaveRef.current = true;
+      updateWhiteboardUrl(result.data.id);
 
       setRenameTarget(result.data);
       toast.add({ title: "Whiteboard created", description: result.data.name });
@@ -199,6 +234,7 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
   const handleSelect = async (id: number) => {
     if (id === activeIdRef.current) {
       setMobileOpen(false);
+      updateWhiteboardUrl(id);
       return;
     }
 
@@ -206,6 +242,7 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
     skipNextSaveRef.current = true;
     activeIdRef.current = id;
     setActiveId(id);
+    updateWhiteboardUrl(id);
 
     const result = await getWhiteboardScene(id);
     const nextScene = result.ok ? result.data : EMPTY_SCENE;
@@ -237,6 +274,7 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
         const nextId = remaining[0]?.id ?? null;
         activeIdRef.current = nextId;
         setActiveId(nextId);
+        updateWhiteboardUrl(nextId);
         if (nextId === null) {
           sceneRef.current = EMPTY_SCENE;
           setScene(EMPTY_SCENE);
@@ -301,6 +339,7 @@ export function WhiteboardsView({ initialWhiteboards }: WhiteboardsViewProps) {
     sceneRef.current = result.data.scene ?? EMPTY_SCENE;
     setScene(result.data.scene ?? EMPTY_SCENE);
     setSaveStatus("idle");
+    updateWhiteboardUrl(result.data.id);
 
     toast.add({ title: "Whiteboard duplicated", description: result.data.name });
   };

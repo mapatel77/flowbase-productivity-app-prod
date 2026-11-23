@@ -57,6 +57,13 @@
       "when": 1795174489914,
       "tag": "0007_sparkling_zaran",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795434955124,
+      "tag": "0008_dashboard_ai_usage",
+      "breakpoints": true
     }
   ]
 }

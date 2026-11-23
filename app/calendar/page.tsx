@@ -3,11 +3,27 @@ import { connection } from "next/server";
 
 import { getCalendarData } from "@/app/calendar/actions";
 import { CalendarView } from "@/components/calendar/calendar-view";
+import { isDateKey } from "@/lib/calendar/dates";
 
-export default async function CalendarPage() {
+type CalendarPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+export default async function CalendarPage({ searchParams }: CalendarPageProps) {
   // The calendar is always rendered per request so it reflects the signed in
   // user and their latest tasks.
   await connection();
+
+  const params = searchParams ? await searchParams : {};
+  const rawDate = firstParam(params.date);
+  const initialDate = isDateKey(rawDate) ? rawDate : null;
+  const initialAction = firstParam(params.action);
+  const openReminderOnLoad = initialAction === "reminder";
 
   const result = await getCalendarData();
 
@@ -31,6 +47,8 @@ export default async function CalendarPage() {
     <CalendarView
       initialCategories={result.data.categories}
       initialEntries={result.data.entries}
+      initialDate={initialDate}
+      openReminderOnLoad={openReminderOnLoad}
     />
   );
 }

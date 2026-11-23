@@ -107,6 +107,8 @@ export const userSettings = pgTable(
     aiCustomInstructions: text("ai_custom_instructions").notNull().default(""),
     aiRefineEnabled: boolean("ai_refine_enabled").notNull().default(true),
     aiAssistantEnabled: boolean("ai_assistant_enabled").notNull().default(true),
+    /** The last successful AI Assistant conversation for this user. */
+    aiAssistantLastUsedAt: timestamp("ai_assistant_last_used_at"),
     aiTemplateBuilderEnabled: boolean("ai_template_builder_enabled")
       .notNull()
       .default(true),

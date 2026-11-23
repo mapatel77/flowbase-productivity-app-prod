@@ -6,11 +6,32 @@ import { WhiteboardsView } from "@/components/whiteboard/whiteboards-view";
 
 export const maxDuration = 30;
 
-export default async function WhiteboardPage() {
+type WhiteboardSearchParams = Record<string, string | string[] | undefined>;
+
+type WhiteboardPageProps = {
+  // Next.js 16 exposes searchParams as a promise on server-rendered pages.
+  searchParams: Promise<WhiteboardSearchParams>;
+};
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseWhiteboardId(value: string | string[] | undefined) {
+  const raw = firstParam(value);
+  if (!raw) return null;
+
+  const id = Number(raw);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+export default async function WhiteboardPage({ searchParams }: WhiteboardPageProps) {
   // Whiteboards are always rendered per request so the list reflects the
   // signed in user and their latest autosaved canvases.
   await connection();
 
+  const params = await searchParams;
+  const whiteboardId = parseWhiteboardId(params.whiteboard);
   const result = await getWhiteboardsData();
 
   if (!result.ok) {
@@ -29,5 +50,10 @@ export default async function WhiteboardPage() {
     );
   }
 
-  return <WhiteboardsView initialWhiteboards={result.data} />;
+  return (
+    <WhiteboardsView
+      initialWhiteboards={result.data}
+      initialWhiteboardId={whiteboardId}
+    />
+  );
 }

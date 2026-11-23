@@ -43,6 +43,8 @@ export type UserSettings = {
   aiCustomInstructions: string;
   aiRefineEnabled: boolean;
   aiAssistantEnabled: boolean;
+  /** The last successful AI Assistant conversation, when one has happened. */
+  aiAssistantLastUsedAt: Date | null;
   aiTemplateBuilderEnabled: boolean;
   aiDiagramEnabled: boolean;
   theme: ThemePreference;

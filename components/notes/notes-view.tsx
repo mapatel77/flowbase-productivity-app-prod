@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   createNote,
@@ -48,6 +49,8 @@ import type { Note, NoteSaveResult } from "@/lib/notes/types";
 type NotesViewProps = {
   initialNotes: Note[];
   initialCategories: CalendarCategory[];
+  initialNoteId?: number | null;
+  createRequested?: boolean;
 };
 
 type DeleteTarget =
@@ -55,11 +58,25 @@ type DeleteTarget =
   | { kind: "permanent"; note: Note }
   | { kind: "empty" };
 
+type CreateOptions = {
+  canonicalizeUrl?: boolean;
+  clearActionOnFailure?: boolean;
+};
+
 function sortActiveNotes(notes: Note[]) {
   return [...notes].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return b.updatedAt.getTime() - a.updatedAt.getTime() || b.id - a.id;
   });
+}
+
+function getInitialActiveNoteId(notes: Note[], requestedId: number | null) {
+  const activeNotes = notes.filter((note) => note.deletedAt === null);
+  const requestedNote = requestedId
+    ? activeNotes.find((note) => note.id === requestedId)
+    : null;
+
+  return requestedNote?.id ?? sortActiveNotes(activeNotes)[0]?.id ?? null;
 }
 
 function EmptyNotesState({
@@ -109,16 +126,19 @@ function EmptyNotesState({
   );
 }
 
-export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
+export function NotesView({
+  initialNotes,
+  initialCategories,
+  initialNoteId = null,
+  createRequested = false,
+}: NotesViewProps) {
+  const router = useRouter();
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [categories] = useState<CalendarCategory[]>(initialCategories);
   const [search, setSearch] = useState("");
-  const [activeNoteId, setActiveNoteId] = useState<number | null>(() => {
-    const first = sortActiveNotes(
-      initialNotes.filter((note) => !note.deletedAt),
-    )[0];
-    return first?.id ?? null;
-  });
+  const [activeNoteId, setActiveNoteId] = useState<number | null>(() =>
+    getInitialActiveNoteId(initialNotes, initialNoteId),
+  );
   const [justCreatedId, setJustCreatedId] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -126,6 +146,9 @@ export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const flushRef = useRef<(() => Promise<void>) | null>(null);
+  const requestedNoteIdRef = useRef(initialNoteId);
+  const createRequestHandledRef = useRef(false);
+  const createInFlightRef = useRef(false);
   const deferredSearch = useDeferredValue(search);
 
   const activeNotes = useMemo(
@@ -171,6 +194,14 @@ export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
     [notes, activeNoteId],
   );
 
+  // A deep link can change while the module is mounted. Only follow a new
+  // requested id so local selection is not undone by a later server render.
+  useEffect(() => {
+    if (requestedNoteIdRef.current === initialNoteId) return;
+    requestedNoteIdRef.current = initialNoteId;
+    setActiveNoteId(getInitialActiveNoteId(notes, initialNoteId));
+  }, [initialNoteId, notes]);
+
   // If the selected note was trashed or removed, fall back to the next note.
   useEffect(() => {
     if (activeNote) return;
@@ -209,39 +240,104 @@ export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
     [],
   );
 
-  const handleCreate = async () => {
-    if (busy) return;
+  const updateNoteUrl = useCallback((id: number | null) => {
+    const url = id === null ? "/notes" : `/notes?note=${id}`;
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
 
-    setBusy(true);
-    try {
-      await flushRef.current?.();
-      const result = await createNote();
+  const replaceNoteUrl = useCallback(
+    (id: number | null) => {
+      router.replace(
+        id === null ? "/notes" : `/notes?note=${id}`,
+        { scroll: false },
+      );
+    },
+    [router],
+  );
 
-      if (!result.ok) {
+  const handleCreate = useCallback(
+    async (options?: CreateOptions) => {
+      if (busy || createInFlightRef.current) return;
+
+      createInFlightRef.current = true;
+      setBusy(true);
+      try {
+        await flushRef.current?.();
+        const result = await createNote();
+
+        if (!result.ok) {
+          toast.add({
+            title: "Could not create the note",
+            description: result.error,
+            type: "error",
+          });
+          if (options?.clearActionOnFailure) {
+            replaceNoteUrl(null);
+          }
+          return;
+        }
+
+        setNotes((current) => [result.data, ...current]);
+        setActiveNoteId(result.data.id);
+        setJustCreatedId(result.data.id);
+        setSearch("");
+        setMobileOpen(false);
+        if (options?.canonicalizeUrl) {
+          // Update the address bar immediately, then let the App Router replace
+          // the history entry with the canonical server URL.
+          updateNoteUrl(result.data.id);
+          replaceNoteUrl(result.data.id);
+        } else {
+          updateNoteUrl(result.data.id);
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "The note could not be created.";
         toast.add({
           title: "Could not create the note",
-          description: result.error,
+          description: message,
           type: "error",
         });
-        return;
+        if (options?.clearActionOnFailure) {
+          replaceNoteUrl(null);
+        }
+      } finally {
+        createInFlightRef.current = false;
+        setBusy(false);
       }
+    },
+    [busy, replaceNoteUrl, updateNoteUrl],
+  );
 
-      setNotes((current) => [result.data, ...current]);
-      setActiveNoteId(result.data.id);
-      setJustCreatedId(result.data.id);
-      setSearch("");
-      setMobileOpen(false);
-    } finally {
-      setBusy(false);
+  // The create query is a command, not a normal render-time side effect. The
+  // ref guard makes it run once even when React re-renders the module while the
+  // server action is in flight.
+  useEffect(() => {
+    if (!createRequested) {
+      createRequestHandledRef.current = false;
+      return;
     }
-  };
+    if (busy || createRequestHandledRef.current) return;
 
-  const handleSelect = useCallback((note: Note) => {
-    void flushRef.current?.();
-    setActiveNoteId(note.id);
-    setJustCreatedId(null);
-    setMobileOpen(false);
-  }, []);
+    createRequestHandledRef.current = true;
+    void handleCreate({
+      canonicalizeUrl: true,
+      clearActionOnFailure: true,
+    });
+  }, [busy, createRequested, handleCreate]);
+
+  const handleSelect = useCallback(
+    (note: Note) => {
+      void flushRef.current?.();
+      setActiveNoteId(note.id);
+      setJustCreatedId(null);
+      setMobileOpen(false);
+      updateNoteUrl(note.id);
+    },
+    [updateNoteUrl],
+  );
 
   const handleTogglePin = async (note: Note) => {
     const nextPinned = !note.pinned;
@@ -408,6 +504,7 @@ export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
       setJustCreatedId(null);
       setSearch("");
       setMobileOpen(false);
+      updateNoteUrl(result.data.id);
     } finally {
       setBusy(false);
     }
@@ -433,6 +530,7 @@ export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
       setActiveNoteId(result.data.id);
       setJustCreatedId(null);
       setMobileOpen(false);
+      updateNoteUrl(result.data.id);
       toast.add({
         title: "Note restored",
         description: noteTitle(result.data.title),
@@ -469,6 +567,7 @@ export function NotesView({ initialNotes, initialCategories }: NotesViewProps) {
         if (wasActive) {
           const nextNote = activeNotes.find((item) => item.id !== note.id);
           setActiveNoteId(nextNote?.id ?? null);
+          updateNoteUrl(nextNote?.id ?? null);
         }
         if (justCreatedId === note.id) setJustCreatedId(null);
 

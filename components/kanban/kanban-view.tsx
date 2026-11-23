@@ -69,21 +69,64 @@ type DeleteTarget =
 
 type KanbanViewProps = {
   initialData: KanbanData;
+  /** Board selected through a dashboard deep link. */
+  initialBoardId?: number | null;
+  /** Opens the task creation flow when the page was opened from the dashboard. */
+  openTaskOnLoad?: boolean;
 };
 
-export function KanbanView({ initialData }: KanbanViewProps) {
+function initialColumnForBoard(
+  boardId: number | null,
+  columns: KanbanColumn[],
+): KanbanColumn | null {
+  if (boardId === null) return null;
+  const boardColumns = columns
+    .filter((column) => column.boardId === boardId)
+    .sort((a, b) => a.position - b.position || a.id - b.id);
+  const todoColumn = boardColumns.find((column) => {
+    const name = column.name.trim().toLowerCase();
+    return name === "todo" || name === "to do" || name === "backlog";
+  });
+  return todoColumn ?? boardColumns[0] ?? null;
+}
+
+export function KanbanView({
+  initialData,
+  initialBoardId = null,
+  openTaskOnLoad = false,
+}: KanbanViewProps) {
+  const editableBoards = initialData.boards.filter(
+    (board) => board.accessRole === "owner" || board.accessRole === "editor",
+  );
+  const requestedBoard = initialData.boards.find(
+    (board) =>
+      board.id === initialBoardId &&
+      (board.accessRole === "owner" || board.accessRole === "editor"),
+  );
+  const startingEditableBoard = requestedBoard ?? editableBoards[0] ?? null;
+  const startingBoard = startingEditableBoard ?? initialData.boards[0] ?? null;
+  const startingColumn = startingEditableBoard
+    ? initialColumnForBoard(startingEditableBoard.id, initialData.columns)
+    : null;
+
   const [boards, setBoards] = useState(initialData.boards);
   const [columns, setColumns] = useState(initialData.columns);
   const [tasks, setTasks] = useState(initialData.tasks);
   const [activeBoardId, setActiveBoardId] = useState<number | null>(
-    initialData.boards[0]?.id ?? null,
+    startingBoard?.id ?? null,
   );
 
-  const [boardDialog, setBoardDialog] = useState<BoardDialogState | null>(null);
+  const [boardDialog, setBoardDialog] = useState<BoardDialogState | null>(() =>
+    openTaskOnLoad && !startingColumn ? { mode: "create" } : null,
+  );
   const [columnDialog, setColumnDialog] = useState<ColumnDialogState | null>(
     null,
   );
-  const [taskDialog, setTaskDialog] = useState<TaskDialogState | null>(null);
+  const [taskDialog, setTaskDialog] = useState<TaskDialogState | null>(() =>
+    openTaskOnLoad && startingColumn
+      ? { mode: "create", columnId: startingColumn.id }
+      : null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
   const [mobileBoardsOpen, setMobileBoardsOpen] = useState(false);
@@ -163,6 +206,15 @@ export function KanbanView({ initialData }: KanbanViewProps) {
       setColumns((current) => [...current, ...result.data.columns]);
       setActiveBoardId(result.data.board.id);
       setMobileBoardsOpen(false);
+
+      if (openTaskOnLoad) {
+        const firstColumn = [...result.data.columns].sort(
+          (a, b) => a.position - b.position || a.id - b.id,
+        )[0];
+        if (firstColumn) {
+          setTaskDialog({ mode: "create", columnId: firstColumn.id });
+        }
+      }
       toast.add({
         title: "Board created",
         description: `${result.data.board.name} is ready for work.`,

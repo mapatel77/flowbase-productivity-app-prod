@@ -41,6 +41,7 @@ import type { ColorToken } from "@/lib/calendar/colors";
 import {
   addMonths,
   addWeeks,
+  fromDateKey,
   formatMonthTitle,
   formatWeekTitle,
   getMonthGrid,
@@ -48,10 +49,14 @@ import {
   toDateKey,
 } from "@/lib/calendar/dates";
 import { buildCategoryMap, toneForEntry } from "@/lib/calendar/tone";
-import type { CalendarCategory, CalendarEntry } from "@/lib/calendar/types";
+import type {
+  CalendarCategory,
+  CalendarEntry,
+  EntryKind,
+} from "@/lib/calendar/types";
 
 type DialogState =
-  | { mode: "create"; entry: null; date: string | null }
+  | { mode: "create"; entry: null; date: string | null; kind?: EntryKind }
   | { mode: "edit"; entry: CalendarEntry; date: string | null };
 
 type CalendarViewProps = {
@@ -59,6 +64,10 @@ type CalendarViewProps = {
   initialEntries: CalendarEntry[];
   defaultView?: ViewMode;
   loadError?: string | null;
+  /** Date selected through a dashboard deep link. */
+  initialDate?: string | null;
+  /** Opens a new reminder through a dashboard deep link. */
+  openReminderOnLoad?: boolean;
 };
 
 export function CalendarView({
@@ -66,6 +75,8 @@ export function CalendarView({
   initialEntries,
   defaultView,
   loadError = null,
+  initialDate = null,
+  openReminderOnLoad = false,
 }: CalendarViewProps) {
   const { settings } = usePreferences();
   const [categories, setCategories] = useState(initialCategories);
@@ -73,11 +84,22 @@ export function CalendarView({
   const [view, setView] = useState<ViewMode>(
     defaultView ?? settings.calendarDefaultView,
   );
-  const [anchorDate, setAnchorDate] = useState(() => new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
-    toDateKey(new Date()),
+  const [anchorDate, setAnchorDate] = useState(() =>
+    initialDate ? fromDateKey(initialDate) : new Date(),
   );
-  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
+    initialDate ?? toDateKey(new Date()),
+  );
+  const [dialog, setDialog] = useState<DialogState | null>(() =>
+    openReminderOnLoad
+      ? {
+          mode: "create",
+          entry: null,
+          date: initialDate ?? toDateKey(new Date()),
+          kind: "reminder",
+        }
+      : null,
+  );
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const [activeEntry, setActiveEntry] = useState<CalendarEntry | null>(null);
@@ -159,7 +181,7 @@ export function CalendarView({
   /* ── dialogs ────────────────────────────────────────────────────────── */
 
   const openCreate = (dateKey: string | null) =>
-    setDialog({ mode: "create", entry: null, date: dateKey });
+    setDialog({ mode: "create", entry: null, date: dateKey, kind: "task" });
 
   const openEdit = (entry: CalendarEntry) =>
     setDialog({ mode: "edit", entry, date: entry.scheduledDate });
@@ -365,6 +387,7 @@ export function CalendarView({
   return (
     <Toaster>
       <DndContext
+        id="calendar-dnd-context"
         sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -441,7 +464,9 @@ export function CalendarView({
           key={`${dialog?.mode ?? "none"}-${
             dialog?.mode === "edit"
               ? dialog.entry.id
-              : (dialog?.date ?? "draft")
+              : `${dialog?.date ?? "draft"}-${
+                  dialog?.mode === "create" ? (dialog.kind ?? "task") : "task"
+                }`
           }`}
           open={dialog !== null}
           onOpenChange={(open) => {
@@ -449,6 +474,7 @@ export function CalendarView({
           }}
           entry={dialog?.entry ?? null}
           defaultDate={dialog?.date ?? null}
+          defaultKind={dialog?.mode === "create" ? (dialog.kind ?? "task") : "task"}
           categories={categories}
           busy={busy}
           onSubmit={handleSubmit}
