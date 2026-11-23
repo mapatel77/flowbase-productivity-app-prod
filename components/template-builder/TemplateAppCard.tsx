@@ -62,11 +62,17 @@ export function TemplateAppCard({ app, onChange }: TemplateAppCardProps) {
       <CardHeader className="flex flex-row items-center justify-between py-2">
         <CardTitle className="text-sm font-medium">{app.appName}</CardTitle>
         <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
-              <MoreHorizontal className="size-4" />
-              <span className="sr-only">More options</span>
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="opacity-0 group-hover:opacity-100"
+              />
+            }
+          >
+            <MoreHorizontal className="size-4" />
+            <span className="sr-only">More options</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => handlePin(app.sidebarPosition ? null : 0)}>
