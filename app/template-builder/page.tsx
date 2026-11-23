@@ -1,19 +1,21 @@
-"use client";
+import { TemplateBuilderClient } from "@/components/template-builder/PromptForm";
 
-import { useState } from "react";
+type TemplateBuilderSearchParams = Record<string, string | string[] | undefined>;
 
-import { TemplateAppsGrid } from "@/components/template-builder/TemplateAppsGrid";
-import { PromptForm } from "@/components/template-builder/PromptForm";
+type TemplateBuilderPageProps = {
+  // Next.js 16 exposes searchParams as a promise on server-rendered pages.
+  searchParams: Promise<TemplateBuilderSearchParams>;
+};
 
-export default function TemplateBuilderPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-  return (
-    <div className="flex flex-col gap-6">
-      <PromptForm
-        onAppCreated={() => setRefreshKey((key) => key + 1)}
-      />
-      <TemplateAppsGrid refreshKey={refreshKey} />
-    </div>
-  );
+export default async function TemplateBuilderPage({
+  searchParams,
+}: TemplateBuilderPageProps) {
+  const params = await searchParams;
+  const focusPrompt = firstParam(params.action) === "generate";
+
+  return <TemplateBuilderClient focusPrompt={focusPrompt} />;
 }

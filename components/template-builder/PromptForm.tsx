@@ -1,20 +1,39 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { createTemplateAppFromPrompt } from "@/app/template-builder/actions";
+import { TemplateAppsGrid } from "@/components/template-builder/TemplateAppsGrid";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 
 type PromptFormProps = {
   onAppCreated: () => void;
+  focusPrompt?: boolean;
 };
 
-export function PromptForm({ onAppCreated }: PromptFormProps) {
+export function PromptForm({ onAppCreated, focusPrompt = false }: PromptFormProps) {
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
+  const promptSectionRef = useRef<HTMLDivElement>(null);
+  const focusHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusPrompt) {
+      focusHandledRef.current = false;
+      return;
+    }
+    if (focusHandledRef.current) return;
+    focusHandledRef.current = true;
+
+    const textarea = promptSectionRef.current?.querySelector("textarea");
+    if (!textarea) return;
+
+    textarea.focus({ preventScroll: true });
+    textarea.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusPrompt]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +70,7 @@ export function PromptForm({ onAppCreated }: PromptFormProps) {
 
   return (
     <form onSubmit={handleGenerate} className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2">
+      <div ref={promptSectionRef} className="flex flex-col gap-2">
         <label className="text-sm font-medium">What mini app would you like to build?</label>
         <Textarea
           id="prompt"
@@ -80,5 +99,24 @@ export function PromptForm({ onAppCreated }: PromptFormProps) {
         )}
       </Button>
     </form>
+  );
+}
+
+/** Client-side shell for the template builder route. */
+export function TemplateBuilderClient({
+  focusPrompt,
+}: {
+  focusPrompt: boolean;
+}) {
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PromptForm
+        focusPrompt={focusPrompt}
+        onAppCreated={() => setRefreshKey((key) => key + 1)}
+      />
+      <TemplateAppsGrid refreshKey={refreshKey} />
+    </div>
   );
 }

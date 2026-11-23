@@ -49,6 +49,8 @@ type TaskDialogProps = {
   entry: CalendarEntry | null;
   /** Date used when creating a new entry. */
   defaultDate: string | null;
+  /** Entry type used for a newly created entry. */
+  defaultKind?: EntryKind;
   categories: CalendarCategory[];
   busy?: boolean;
   /** Resolves to `true` when the entry was saved. */
@@ -61,6 +63,7 @@ export function TaskDialog({
   onOpenChange,
   entry,
   defaultDate,
+  defaultKind = "task",
   categories,
   busy = false,
   onSubmit,
@@ -70,7 +73,9 @@ export function TaskDialog({
   // changes, so these initialisers always describe the entry being edited.
   const [title, setTitle] = useState(entry?.title ?? "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
-  const [kind, setKind] = useState<EntryKind>(entry?.kind ?? "task");
+  const [kind, setKind] = useState<EntryKind>(
+    entry?.kind ?? defaultKind,
+  );
   const [categoryId, setCategoryId] = useState<number | null>(
     entry?.categoryId ?? null,
   );

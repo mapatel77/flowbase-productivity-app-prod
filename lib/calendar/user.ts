@@ -32,6 +32,15 @@ async function findUserByEmail(email: string) {
   return rows[0] ?? null;
 }
 
+function toProfile(row: typeof users.$inferSelect): CurrentUserProfile {
+  return {
+    id: row.id,
+    clerkId: row.clerkId,
+    name: row.name,
+    email: row.email,
+  };
+}
+
 /** Creates (or returns) the local demo user used when Clerk is not set up. */
 async function resolveDemoUser() {
   const existing = await findUserByClerkId(DEMO_CLERK_ID);
@@ -143,6 +152,62 @@ export async function resolveCurrentUserProfile(): Promise<CurrentUserProfile | 
  */
 export async function resolveCurrentUserId(): Promise<number | null> {
   return (await resolveCurrentUserProfile())?.id ?? null;
+}
+
+/**
+ * Resolves only the authenticated workspace owner.
+ *
+ * Unlike `resolveCurrentUserProfile`, this helper never falls back to the
+ * local demo account when Clerk is configured. It is used by surfaces that
+ * expose a complete activity overview, where silently showing another user's
+ * data would be unsafe.
+ */
+export async function resolveAuthenticatedUserProfile(): Promise<CurrentUserProfile | null> {
+  if (!isClerkConfigured) {
+    try {
+      const demo = await resolveDemoUser();
+      return demo ? toProfile(demo) : null;
+    } catch (error) {
+      console.error("Failed to resolve the demo user", error);
+      return null;
+    }
+  }
+
+  try {
+    const { userId } = await auth();
+    if (!userId) return null;
+
+    const existing = await findUserByClerkId(userId);
+    if (existing) return toProfile(existing);
+
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(userId);
+    const email =
+      clerkUser.primaryEmailAddress?.emailAddress ??
+      clerkUser.emailAddresses?.[0]?.emailAddress;
+
+    if (!email) return null;
+
+    const name =
+      [clerkUser.firstName, clerkUser.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
+
+    const [upserted] = await db
+      .insert(users)
+      .values({ clerkId: userId, name, email })
+      .onConflictDoUpdate({
+        target: users.email,
+        set: { name, clerkId: userId },
+      })
+      .returning();
+
+    return upserted ? toProfile(upserted) : null;
+  } catch (error) {
+    console.error("Failed to resolve the authenticated user", error);
+    return null;
+  }
 }
 
 /** Used by the category seeding helper to avoid duplicate defaults. */

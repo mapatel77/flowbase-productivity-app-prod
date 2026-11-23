@@ -1,39 +1,30 @@
-"use client";
+import { format } from "date-fns";
 
-import { useEffect, useState } from "react";
+import type { DashboardProfile } from "@/lib/dashboard/types";
 
-export function Greeting() {
-  const [message, setMessage] = useState({
-    greeting: "Welcome back",
-    date: "",
-  });
+type GreetingProps = {
+  profile: DashboardProfile;
+  dueToday: number;
+};
 
-  useEffect(() => {
-    const now = new Date();
-    const hour = now.getHours();
+function getGreeting(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
-    setMessage({
-      greeting:
-        hour < 12
-          ? "Good morning"
-          : hour < 18
-            ? "Good afternoon"
-            : "Good evening",
-      date: now.toLocaleDateString("en-GB", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      }),
-    });
-  }, []);
+export function Greeting({ profile, dueToday }: GreetingProps) {
+  const now = new Date();
+  const displayName = profile.firstName.trim() || profile.name.trim();
+  const taskLabel = dueToday === 1 ? "task" : "tasks";
 
   return (
     <div className="flex flex-col gap-1">
       <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-[28px]">
-        {message.greeting}, Arav
+        {getGreeting(now.getHours())}, {displayName}
       </h1>
       <p className="text-sm text-muted-foreground">
-        {message.date || "Loading your workspace…"} · 3 tasks due today
+        {format(now, "EEEE, d MMMM")} · {dueToday} {taskLabel} due today
       </p>
     </div>
   );

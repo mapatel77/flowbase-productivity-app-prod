@@ -16,6 +16,7 @@ const FALLBACK_SETTINGS: UserSettings = {
   id: 0,
   userId: 0,
   ...DEFAULT_SETTINGS,
+  aiAssistantLastUsedAt: null,
   createdAt: new Date(0),
   updatedAt: new Date(0),
 };

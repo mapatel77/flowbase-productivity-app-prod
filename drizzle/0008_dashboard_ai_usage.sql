@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" ADD COLUMN "ai_assistant_last_used_at" timestamp;

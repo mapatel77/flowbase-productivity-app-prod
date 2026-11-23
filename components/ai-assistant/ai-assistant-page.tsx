@@ -197,15 +197,28 @@ function MessageBubble({ message }: { message: AiMessage }) {
   );
 }
 
-export function AiAssistantPage() {
+type AiAssistantPageProps = {
+  initialPrompt?: string;
+};
+
+export function AiAssistantPage({ initialPrompt = "" }: AiAssistantPageProps) {
   const [messages, setMessages] = useState<AiMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialPrompt);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasStartedChat, setHasStartedChat] = useState(false);
   const [liveUserText, setLiveUserText] = useState("");
   const [liveAgentText, setLiveAgentText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const initialPromptRef = useRef(initialPrompt);
+
+  // A prompt in the URL only pre-fills the input. It is never submitted
+  // automatically; the user remains in control of sending it.
+  useEffect(() => {
+    if (initialPromptRef.current === initialPrompt) return;
+    initialPromptRef.current = initialPrompt;
+    setInput(initialPrompt);
+  }, [initialPrompt]);
 
   const {
     state: voiceState,

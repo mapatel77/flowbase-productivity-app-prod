@@ -68,6 +68,7 @@ export function toUserSettings(row: UserSettingsRow): UserSettings {
     aiCustomInstructions: row.aiCustomInstructions,
     aiRefineEnabled: row.aiRefineEnabled,
     aiAssistantEnabled: row.aiAssistantEnabled,
+    aiAssistantLastUsedAt: row.aiAssistantLastUsedAt,
     aiTemplateBuilderEnabled: row.aiTemplateBuilderEnabled,
     aiDiagramEnabled: row.aiDiagramEnabled,
     theme: oneOf(THEME_OPTIONS, row.theme)
@@ -97,6 +98,7 @@ export function createFallbackSettings(userId = 0): UserSettings {
     id: 0,
     userId,
     ...DEFAULT_SETTINGS,
+    aiAssistantLastUsedAt: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
   };

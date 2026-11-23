@@ -457,6 +457,22 @@ async function callGemini(input: {
   return { content: content.trim(), toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
 }
 
+async function markAssistantUsed(userId: number): Promise<void> {
+  try {
+    const usedAt = new Date();
+    await db
+      .insert(userSettings)
+      .values({ userId, aiAssistantLastUsedAt: usedAt })
+      .onConflictDoUpdate({
+        target: userSettings.userId,
+        set: { aiAssistantLastUsedAt: usedAt, updatedAt: usedAt },
+      });
+  } catch (error) {
+    // Usage tracking should never prevent a successful assistant response.
+    console.error("Failed to record AI Assistant usage", error);
+  }
+}
+
 export async function aiChat(input: AiChatInput): Promise<ActionResult<{ message: AiMessage; toolResults?: AiToolResult[] }>> {
   try {
     const profile = await requireProfile();
@@ -489,6 +505,7 @@ export async function aiChat(input: AiChatInput): Promise<ActionResult<{ message
 
       if (!result.toolCalls || result.toolCalls.length === 0) {
         // No tool calls, we're done
+        await markAssistantUsed(profile.id);
         return { ok: true, data: { message: assistantMessage, toolResults } };
       }
 
@@ -508,6 +525,7 @@ export async function aiChat(input: AiChatInput): Promise<ActionResult<{ message
     }
 
     // Max iterations reached, return last assistant message
+    await markAssistantUsed(profile.id);
     return { ok: true, data: { message: messages[messages.length - 1] as AiMessage, toolResults } };
   } catch (error) {
     return fail(error);
