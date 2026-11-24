@@ -34,7 +34,7 @@ export type NavGroup = {
 
 const dashboard: NavItem = {
   title: "Dashboard",
-  href: "/",
+  href: "/dashboard",
   icon: LayoutDashboard,
   iconClassName: "text-orange-500 dark:text-orange-400",
   description: "Your day at a glance — focus, tasks and recent spaces.",
@@ -129,8 +129,8 @@ export const allNavigation: NavItem[] = navGroups.flatMap((group) => group.items
  * The root route only matches exactly, otherwise every route would be "active".
  */
 export function isNavItemActive(pathname: string, href: string): boolean {
-  if (href === "/") {
-    return pathname === "/";
+  if (href === "/dashboard") {
+    return pathname === "/dashboard";
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);

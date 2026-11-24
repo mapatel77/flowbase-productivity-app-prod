@@ -104,7 +104,7 @@ export function AppSidebar() {
       <SidebarHeader className="pb-2.5">
         {collapsed ? (
           <div className="flex flex-col items-center gap-1.5">
-            <Link href="/" aria-label={workspace.name}>
+            <Link href="/dashboard" aria-label={workspace.name}>
               <Logo />
             </Link>
             <Button
@@ -119,7 +119,7 @@ export function AppSidebar() {
           </div>
         ) : (
           <div className="flex items-center gap-2 px-1">
-            <Link href="/" aria-label={workspace.name}>
+            <Link href="/dashboard" aria-label={workspace.name}>
               <Logo />
             </Link>
             <div className="flex min-w-0 flex-1 flex-col leading-tight">

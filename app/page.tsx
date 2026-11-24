@@ -1,25 +1,13 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { connection } from "next/server";
+import type { Metadata } from "next";
 
-import { DashboardView } from "@/components/dashboard/dashboard-view";
-import { getDashboardData } from "@/app/dashboard/queries";
-import { isClerkConfigured } from "@/lib/calendar/user";
+import { LandingPage } from "@/components/landing/landing-page";
 
-export default async function DashboardPage() {
-  // The dashboard is always rendered per request so every card reflects live workspace data.
-  await connection();
+export const metadata: Metadata = {
+  title: "Flowbase — Your AI-Powered Productivity Workspace",
+  description:
+    "Flowbase combines Notion-style notes, Miro-style whiteboards, Kanban boards, calendar, and an AI assistant into one modern workspace for teams and individuals.",
+};
 
-  // In Clerk-enabled production, redirect unauthenticated users to sign in
-  // rather than showing demo data or a raw error.
-  if (isClerkConfigured) {
-    const { userId } = await auth();
-    if (!userId) {
-      redirect("/sign-in");
-    }
-  }
-
-  const data = await getDashboardData();
-
-  return <DashboardView data={data} />;
+export default function HomePage() {
+  return <LandingPage />;
 }
