@@ -1,7 +1,4 @@
-import type {
-  DashboardData,
-  DashboardSection,
-} from "@/lib/dashboard/types";
+import type { DashboardData, DashboardSection } from "@/lib/dashboard/types";
 
 import { DashboardSectionError } from "@/components/dashboard/dashboard-section-error";
 import { FeatureStatusCards } from "@/components/dashboard/feature-status-cards";

@@ -65,5 +65,12 @@ export default async function RootLayout({
     return tree;
   }
 
-  return <ClerkProvider>{tree}</ClerkProvider>;
+  return (
+    <ClerkProvider
+      signInForceRedirectUrl="/dashboard"
+      signUpForceRedirectUrl="/dashboard"
+    >
+      {tree}
+    </ClerkProvider>
+  );
 }

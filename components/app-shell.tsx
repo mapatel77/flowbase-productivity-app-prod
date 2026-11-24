@@ -13,7 +13,9 @@ const standaloneRoutes = ["/sign-in", "/sign-up"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isStandalone = standaloneRoutes.some((route) => pathname.startsWith(route));
+  const isStandalone =
+    pathname === "/" ||
+    standaloneRoutes.some((route) => pathname.startsWith(route));
 
   if (isStandalone) {
     return <>{children}</>;

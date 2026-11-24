@@ -155,7 +155,7 @@ export function SettingsView({
               <Button
                 variant="outline"
                 className="h-9 rounded-xl bg-card/70"
-                render={<Link href="/" />}
+                render={<Link href="/dashboard" />}
               >
                 Back to workspace
               </Button>
